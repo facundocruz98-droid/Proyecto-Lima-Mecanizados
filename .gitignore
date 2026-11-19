@@ -1,0 +1,7 @@
+datos/*.db
+datos/*.db-journal
+respaldos/
+node_modules/
+.env
+.env.*
+!.env.example

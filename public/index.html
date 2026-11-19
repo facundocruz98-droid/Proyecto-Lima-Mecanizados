@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seguimiento de Taller · Lima Mecanizados</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d5fa8'/%3E%3Cpath d='M8 8v16M12 8v16M15 8v16M19 8v16M21.5 8v16M25 8v16' stroke='%23fff' stroke-width='1.6'/%3E%3C/svg%3E">
+  <script>
+    // Aplica el tema guardado antes de pintar, para que no parpadee.
+    try {
+      var tema = localStorage.getItem('lima-tema');
+      if (tema === 'oscuro' || tema === 'claro') document.documentElement.dataset.tema = tema;
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <a class="saltar" href="#vista">Saltar al contenido</a>
+  <div class="app">
+    <aside class="lateral">
+      <div class="marca">
+        <span class="marca-logo" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="34" height="34"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M8 8.5v15M11.5 8.5v15M14.5 8.5v15M18.5 8.5v15M21 8.5v15M24.5 8.5v15" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </span>
+        <span class="marca-texto">
+          <strong>Lima Mecanizados</strong>
+          <small>Seguimiento de Taller</small>
+        </span>
+      </div>
+
+      <nav class="menu" aria-label="Secciones">
+        <p class="menu-grupo">Gerencia y Supervisión</p>
+        <a href="#panel" data-ruta="panel"><span class="ico" data-icono="panel"></span><span>Panel</span><span class="menu-cuenta" id="cuentaAlertas" hidden></span></a>
+        <a href="#alta" data-ruta="alta"><span class="ico" data-icono="mas"></span><span>Alta de proyecto</span></a>
+        <a href="#historial" data-ruta="historial"><span class="ico" data-icono="reloj"></span><span>Historial y causas</span></a>
+        <a href="#planilla" data-ruta="planilla"><span class="ico" data-icono="tabla"></span><span>Planilla</span></a>
+        <p class="menu-grupo">Compras</p>
+        <a href="#compras" data-ruta="compras"><span class="ico" data-icono="caja"></span><span>Recepción y hoja de ruta</span><span class="menu-cuenta" id="cuentaCompras" hidden></span></a>
+        <p class="menu-grupo">Taller</p>
+        <a href="#taller" data-ruta="taller"><span class="ico" data-icono="escaner"></span><span>Puesto de taller</span></a>
+      </nav>
+
+      <div class="lateral-pie">
+        <div class="conexion" id="conexion" title="Estado de la conexión con el servidor">
+          <span class="conexion-punto"></span><span id="conexionTexto">Conectando…</span>
+        </div>
+        <button class="boton-lateral" id="botonTema" type="button"><span class="ico" data-icono="tema"></span><span id="temaTexto">Modo oscuro</span></button>
+        <button class="boton-lateral" id="botonDemo" type="button"><span class="ico" data-icono="reiniciar"></span><span>Restablecer datos de ejemplo</span></button>
+      </div>
+    </aside>
+
+    <main class="contenido">
+      <header class="cabecera">
+        <div>
+          <h1 id="titulo">Panel</h1>
+          <p id="subtitulo"></p>
+        </div>
+        <div class="cabecera-fecha" id="fechaHoy"></div>
+      </header>
+      <div id="vista" tabindex="-1"></div>
+    </main>
+  </div>
+
+  <div class="avisos" id="avisos" aria-live="polite"></div>
+  <dialog class="dialogo" id="dialogo"></dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
