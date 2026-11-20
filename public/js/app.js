@@ -74,7 +74,8 @@ async function mostrarVista() {
     else a.removeAttribute('aria-current');
   });
   $('#titulo').textContent = vista.titulo;
-  $('#subtitulo').textContent = vista.subtitulo;
+  $('#subtitulo').textContent = vista.subtitulo || '';
+  $('#subtitulo').hidden = !vista.subtitulo;
   document.title = `${vista.titulo} · Seguimiento de Taller`;
 
   // Cada pantalla recibe un marco nuevo: así sus manejadores de eventos no se acumulan.

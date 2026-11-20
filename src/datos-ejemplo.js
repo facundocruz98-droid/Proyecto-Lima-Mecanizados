@@ -19,8 +19,11 @@ function cargarDatosDeEjemplo(db, ahora = new Date()) {
   };
 
   transaccion(db, () => {
-    db.exec('DELETE FROM evento; DELETE FROM material; DELETE FROM proyecto; DELETE FROM cliente; DELETE FROM usuario;');
-    db.exec("DELETE FROM sqlite_sequence WHERE name IN ('evento', 'material', 'cliente', 'usuario');");
+    // Restablecer vuelve al estado inicial de la demo: también vacía los planes y el catálogo de etapas.
+    db.exec(`DELETE FROM etapa_pedido; DELETE FROM etapa_catalogo; DELETE FROM evento; DELETE FROM material;
+             DELETE FROM proyecto; DELETE FROM cliente; DELETE FROM usuario;`);
+    db.exec(`DELETE FROM sqlite_sequence WHERE name IN
+             ('evento', 'material', 'cliente', 'usuario', 'etapa_pedido', 'etapa_catalogo');`);
 
     const usuario = db.prepare('INSERT INTO usuario (nombre, rol) VALUES (?, ?)');
     const U = {};

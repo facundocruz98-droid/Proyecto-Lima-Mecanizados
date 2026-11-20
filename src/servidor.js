@@ -197,6 +197,8 @@ function crearServidor({ rutaBase, ahora } = {}) {
     continuar: servicios.continuar,
     finalizar: servicios.finalizar,
     etapa: servicios.cambiarEtapa,
+    'completar-etapa': servicios.completarEtapa,
+    'iniciar-etapa': servicios.iniciarEtapa,
     reprogramar: servicios.reprogramar,
   };
 
@@ -215,6 +217,7 @@ function crearServidor({ rutaBase, ahora } = {}) {
       const seguimiento = /^\/api\/seguimiento\/([^/]+)$/.exec(ruta);
       if (seguimiento) return responderJSON(res, 200, servicios.seguimientoCliente(decodeURIComponent(seguimiento[1])));
       if (ruta === '/api/proyectos') return responderJSON(res, 200, servicios.listarProyectos());
+      if (ruta === '/api/etapas') return responderJSON(res, 200, servicios.catalogoEtapas());
       if (ruta === '/api/alertas') return responderJSON(res, 200, servicios.alertas());
       if (ruta === '/api/indicadores') return responderJSON(res, 200, servicios.indicadores());
       if (ruta === '/api/planilla') return responderJSON(res, 200, servicios.planilla());

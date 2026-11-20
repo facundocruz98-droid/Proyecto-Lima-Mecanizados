@@ -50,12 +50,30 @@ CREATE TABLE IF NOT EXISTS evento (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   id_proyecto  TEXT NOT NULL REFERENCES proyecto(id) ON DELETE CASCADE,
   tipo         TEXT NOT NULL CHECK (tipo IN ('alta', 'recepcion', 'recepcion_parcial', 'inicio',
-                 'etapa', 'pausa', 'continuar', 'finalizar', 'reprogramar', 'cancelar')),
+                 'etapa', 'pausa', 'continuar', 'finalizar', 'reprogramar', 'cancelar',
+                 'etapa_inicio', 'etapa_fin')),
   fecha_hora   TEXT NOT NULL,                      -- ISO 8601 (UTC)
   id_usuario   INTEGER NOT NULL REFERENCES usuario(id),
   etapa        TEXT,
   causa        TEXT,
   detalle      TEXT
+);
+
+-- Catálogo de etapas del taller: arranca vacío y se completa con las etapas de cada plan confirmado.
+CREATE TABLE IF NOT EXISTS etapa_catalogo (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre  TEXT NOT NULL UNIQUE COLLATE NOCASE
+);
+
+-- Plan de fabricación de cada pedido: sus etapas en orden, con el inicio y el fin reales de cada una.
+CREATE TABLE IF NOT EXISTS etapa_pedido (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  id_proyecto  TEXT NOT NULL REFERENCES proyecto(id) ON DELETE CASCADE,
+  orden        INTEGER NOT NULL,
+  nombre       TEXT NOT NULL,
+  inicio       TEXT,                               -- ISO 8601 (UTC); NULL = todavía no se inició
+  fin          TEXT,                               -- ISO 8601 (UTC); NULL = no se completó
+  UNIQUE (id_proyecto, orden)
 );
 
 -- Configuración interna (ej. la clave con la que se firman los links de seguimiento del cliente).
@@ -66,6 +84,7 @@ CREATE TABLE IF NOT EXISTS config (
 
 CREATE INDEX IF NOT EXISTS idx_evento_proyecto  ON evento (id_proyecto, id);
 CREATE INDEX IF NOT EXISTS idx_material_proyecto ON material (id_proyecto);
+CREATE INDEX IF NOT EXISTS idx_etapa_pedido ON etapa_pedido (id_proyecto, orden);
 `;
 
 /**
@@ -77,17 +96,23 @@ function abrirBase(ruta) {
   const db = new DatabaseSync(ruta);
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(ESQUEMA);
-  migrarCancelados(db);
+  migrarEsquema(db);
   return db;
 }
 
 /**
- * Las bases creadas antes no aceptaban el estado "cancelado" ni el evento "cancelar".
- * SQLite no permite cambiar esas reglas: se rehacen las dos tablas copiando todos los datos.
+ * Las bases creadas con versiones anteriores tienen reglas (CHECK) más viejas: no aceptaban el estado
+ * "cancelado" ni los eventos "cancelar", "etapa_inicio" y "etapa_fin". SQLite no permite cambiar esas
+ * reglas: se rehace cada tabla desactualizada copiando todos sus datos (no se pierde nada del historial).
  */
-function migrarCancelados(db) {
-  const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'evento'").get()?.sql || '';
-  if (sql.includes("'cancelar'")) return;
+const MARCAS = [['proyecto', "'cancelado'"], ['evento', "'etapa_fin'"]];
+
+function migrarEsquema(db) {
+  const desactualizadas = MARCAS.filter(([tabla, marca]) => {
+    const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(tabla)?.sql || '';
+    return !sql.includes(marca);
+  }).map(([tabla]) => tabla);
+  if (!desactualizadas.length) return;
   const definicion = (tabla) => {
     const inicio = ESQUEMA.indexOf(`CREATE TABLE IF NOT EXISTS ${tabla} (`);
     const fin = ESQUEMA.indexOf(');', inicio) + 2;
@@ -96,7 +121,7 @@ function migrarCancelados(db) {
   db.exec('PRAGMA foreign_keys = OFF;');
   db.exec('BEGIN');
   try {
-    for (const tabla of ['proyecto', 'evento']) {
+    for (const tabla of desactualizadas) {
       db.exec(definicion(tabla));
       db.exec(`INSERT INTO ${tabla}_nueva SELECT * FROM ${tabla}`);
       db.exec(`DROP TABLE ${tabla}`);

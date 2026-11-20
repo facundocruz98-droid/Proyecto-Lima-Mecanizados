@@ -1,12 +1,22 @@
 /** Panel de Gerencia y Supervisión: semáforo de proyectos y alertas. */
 import { api } from '../api.js';
 import { campoFecha } from '../calendario.js';
-import { avisar, codigoConUrgencia, esc, fecha, fechaDeInstante, fechaHora, pastillaEstado, textoPlazo } from '../util.js';
+import { avisar, codigoConUrgencia, esc, fecha, fechaDeInstante, fechaHora, pastillaEstado, textoEtapa, textoPlazo } from '../util.js';
 
 let raiz;
 let ctx;
 let resaltado = '';            // ID del proyecto resaltado desde una alerta
 let temporizadorResaltado = null;
+
+/** Hora en que quedó listo (materiales confirmados) e inicio real: la espera entre ambas no es fabricación. */
+function tiemposInicio(p) {
+  if (!p.listo_desde && !p.inicio_real) return '';
+  const partes = [];
+  if (p.listo_desde) partes.push(`Listo ${fechaHora(p.listo_desde)}`);
+  if (p.inicio_real) partes.push(`Inicio real ${fechaHora(p.inicio_real)}`);
+  else if (p.estado === 'listo') partes.push('sin iniciar');
+  return `<div class="chico suave" style="margin-top:4px">${partes.join(' · ')}</div>`;
+}
 
 function filaProyecto(p) {
   const pausa = p.pausa_actual
@@ -30,8 +40,8 @@ function filaProyecto(p) {
     <tr class="fila-${p.semaforo}${p.id === resaltado ? ' fila-resaltada' : ''}" data-id="${esc(p.id)}">
       <td>${codigoConUrgencia(p)}</td>
       <td><strong>${esc(p.nombre)}</strong><div class="chico suave">${esc(p.cliente)}</div>${pausa}</td>
-      <td>${pastillaEstado(p)}</td>
-      <td>${esc(p.etapa_actual || '—')}</td>
+      <td>${pastillaEstado(p)}${tiemposInicio(p)}</td>
+      <td>${textoEtapa(p)}</td>
       <td class="num">${fecha(p.plazo_entrega)}${plazo}</td>
       <td class="num">${estimada}</td>
       <td class="celda-acciones apiladas">

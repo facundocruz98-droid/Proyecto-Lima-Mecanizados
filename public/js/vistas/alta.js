@@ -52,7 +52,7 @@ function reiniciarFormulario() {
 
 export default {
   titulo: 'Alta de proyecto',
-  subtitulo: 'Gerencia carga el trabajo y su plazo de entrega. Ese plazo es la referencia de todas las alertas.',
+  subtitulo: '',
   async montar(elemento, contexto) {
     raiz = elemento;
     ctx = contexto;

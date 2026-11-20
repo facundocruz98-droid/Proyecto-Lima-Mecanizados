@@ -47,7 +47,7 @@ La hoja de ruta se imprime desde Compras (tamaño A5) con código **Code 128**.
 | Historial y causas | Gerencia / Supervisión | Línea de tiempo de cada trabajo, causas de demora y pausas por etapa |
 | Planilla | Gerencia | La planilla de siempre, con "En Ejec" y "Fecha Fin" completadas por el escaneo; se descarga para Excel. "Cargar Excel" **reemplaza** todos los proyectos por los del archivo (incluidos los cancelados) |
 | Recepción y hoja de ruta | Compras | Registra la llegada de materiales, emite e imprime la hoja de ruta, atiende alertas |
-| Puesto de taller | Operario | Escanea e inicia, pausa, continúa, finaliza y marca la etapa |
+| Puesto de taller | Operario | Escanea, arma el **Plan de fabricación** al iniciar y avanza etapa por etapa: iniciar etapa, pausar, continuar, completar etapa y finalizar pedido |
 | Seguimiento del cliente | Cliente | Vista previa de lo que ve el cliente y su link; la página pública es `seguimiento.html` |
 
 ## Reglas de negocio
@@ -76,6 +76,21 @@ La hoja de ruta se imprime desde Compras (tamaño A5) con código **Code 128**.
 
 10. **Proyectos cancelados:** quedan con estado "Cancelado", no generan alertas y el taller no puede trabajarlos.
     Se cargan desde el Excel (columna de estado "Cancelado" o evento `cancelar` en el historial).
+
+11. **Plan de fabricación.** Al tocar "Iniciar" en un pedido listo se abre el formulario "Plan de fabricación";
+    abrirlo o cerrarlo no inicia nada. "Guardar e iniciar fabricación" guarda el plan ordenado, registra el inicio real
+    e inicia la primera etapa en una sola operación (un doble clic o un reintento no duplica el inicio).
+12. **Catálogo de etapas.** Arranca vacío. Las etapas de cada plan confirmado quedan como sugerencias para los pedidos
+    siguientes (compartido por todo el taller, se guarda en la base). Cada pedido conserva su propio plan y orden.
+13. **Avance por etapas.** "Completar etapa" registra su fin y deja la siguiente lista; su tiempo empieza recién con
+    "Iniciar etapa", así la espera entre etapas no cuenta como fabricación. Cada pausa queda vinculada a la etapa activa
+    (o a la próxima, si se pausa entre etapas) y "Continuar" vuelve a esa misma etapa.
+    "Finalizar pedido" se habilita con todas las etapas completadas y pide confirmación.
+14. **Listo vs. inicio real.** La hora en que Compras confirmó los materiales ("listo") y la del inicio real se muestran
+    por separado en el Panel y en el Historial; la espera previa no es tiempo de fabricación.
+15. **Pedidos anteriores sin plan** se siguen mostrando y operando con el flujo anterior (etapas fijas).
+16. **Cliente.** Sigue viendo solo los 4 pasos (Pedido recibido → En fabricación → Listo para entregar → Entregado):
+    el plan de etapas es interno del taller. La página se actualiza sola con el aviso en tiempo real del sistema.
 
 El margen de 2 días, la lista de etapas y el cálculo de la entrega estimada están en `src/reglas.js`.
 
@@ -106,7 +121,8 @@ datos/                   Base de datos (se crea sola)
 
 ## Base de datos
 
-SQLite, 6 tablas: `cliente`, `usuario`, `proyecto`, `material`, `evento` y `config`
+SQLite, 8 tablas: `cliente`, `usuario`, `proyecto`, `material`, `evento`, `etapa_catalogo` (etapas sugeridas del taller),
+`etapa_pedido` (plan de cada pedido, con inicio y fin reales de cada etapa) y `config`
 (guarda la clave con la que se firman los links de seguimiento).
 Cada acción queda guardada como un **evento** con fecha, hora, usuario, etapa, causa y detalle;
 de ahí salen el historial, las alertas y los indicadores.
@@ -122,7 +138,9 @@ de ahí salen el historial, las alertas y los indicadores.
 | POST | `/api/proyectos/:id/reprogramar` | Cambia el plazo con motivo (Gerencia) |
 | POST | `/api/proyectos/:id/recepcion` | Recepción de materiales indispensables (Compras) |
 | POST | `/api/proyectos/:id/recepcion-parcial` | Material que llega después (Compras) |
-| POST | `/api/proyectos/:id/iniciar` · `pausar` · `continuar` · `finalizar` · `etapa` | Acciones del taller |
+| POST | `/api/proyectos/:id/iniciar` · `pausar` · `continuar` · `finalizar` · `etapa` | Acciones del taller (`iniciar` recibe `plan`: la lista ordenada de etapas) |
+| POST | `/api/proyectos/:id/completar-etapa` · `iniciar-etapa` | Avance por etapas del plan de fabricación |
+| GET | `/api/etapas` | Catálogo de etapas sugeridas |
 | GET | `/api/seguimiento/:link` | Datos públicos de un proyecto para el cliente |
 | GET | `/api/alertas` | Vencidos, falta de material, material recibido y por vencer |
 | GET | `/api/indicadores` | Pausas y horas detenidas por causa y por etapa |
@@ -138,7 +156,7 @@ de ahí salen el historial, las alertas y los indicadores.
 npm test
 ```
 
-Corre 32 pruebas automáticas: reglas de negocio, generador de código de barras y el ciclo completo
+Corre 45 pruebas automáticas: reglas de negocio, plan de fabricación por etapas, generador de código de barras y el ciclo completo
 de un proyecto contra el servidor real (con una base de datos temporal).
 
 ## Copia de seguridad

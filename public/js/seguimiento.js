@@ -142,5 +142,10 @@ async function cargar() {
 }
 
 cargar();
-// Se actualiza sola: cuando el taller avanza, el cliente lo ve sin recargar.
+// Se actualiza sola: el servidor avisa cada cambio del taller (el mismo aviso en tiempo real que usan las pantallas
+// internas) y la página vuelve a pedir sus datos públicos. Por las dudas, también consulta cada 30 segundos.
+try {
+  const avisos = new EventSource('/api/tiempo-real');
+  avisos.addEventListener('cambio', () => cargar());
+} catch { /* navegador sin tiempo real: queda la consulta periódica */ }
 setInterval(cargar, 30000);

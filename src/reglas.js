@@ -56,6 +56,9 @@ function pasosCliente(estado) {
   }));
 }
 
+/** Máximo de etapas en un Plan de fabricación. */
+const MAX_ETAPAS_PLAN = 20;
+
 /** Días de anticipación de la alerta preventiva (semáforo amarillo). */
 const MARGEN_ALERTA_DIAS = 2;
 
@@ -157,6 +160,7 @@ module.exports = {
   ESTADOS_CLIENTE,
   PASOS_CLIENTE,
   pasosCliente,
+  MAX_ETAPAS_PLAN,
   ROLES,
   MARGEN_ALERTA_DIAS,
   FORMATO_ID,

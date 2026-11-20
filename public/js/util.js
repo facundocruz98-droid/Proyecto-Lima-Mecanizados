@@ -69,6 +69,11 @@ const TRAZOS = {
   celular: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/>',
   izquierda: '<path d="M14.5 6l-6 6 6 6"/>',
   derecha: '<path d="M9.5 6l6 6-6 6"/>',
+  arriba: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  abajo: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  cerrar: '<path d="M6 6l12 12M18 6L6 18"/>',
+  bandera: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+  siguiente: '<path d="M5 12h12M12 6l6 6-6 6"/>',
 };
 
 /** Ícono SVG en línea (hereda el color del texto). */
@@ -101,4 +106,16 @@ export function pastillaEstado(p) {
 
 export function codigoConUrgencia(p) {
   return `<span class="codigo">${esc(p.id)}</span>${p.urgencia === 'U' ? '<span class="urgente" title="Urgente">URG</span>' : ''}`;
+}
+
+/**
+ * Texto corto de la etapa para tablas y fichas.
+ * Con plan: "2 de 4 · Perforado" (+ "por iniciar" si espera "Iniciar etapa"). Sin plan: la etapa de siempre.
+ */
+export function textoEtapa(p) {
+  if (!p.tiene_plan) return esc(p.etapa_actual || '—');
+  if (p.todas_completadas) return `${p.total_etapas} de ${p.total_etapas} completas`;
+  const foco = p.plan.find((e) => e.estado === 'en_curso') || p.plan.find((e) => e.estado === 'lista');
+  if (!foco) return '—';
+  return `${foco.orden} de ${p.total_etapas} · ${esc(foco.nombre)}${foco.estado === 'lista' ? ' <span class="chico suave">(por iniciar)</span>' : ''}`;
 }

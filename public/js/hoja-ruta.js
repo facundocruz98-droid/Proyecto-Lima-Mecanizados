@@ -2,6 +2,25 @@
 import { codigoDeBarrasSVG } from './codigo128.js';
 import { esc, fecha, fechaHora } from './util.js';
 
+const MARCA = { completada: '■', en_curso: '▶', lista: '□', pendiente: '□' };
+const ESTADO = { completada: 'completada', en_curso: 'en curso', lista: 'próxima', pendiente: '' };
+
+/** Plan de fabricación en la hoja: se define en el Puesto de taller al iniciar el pedido. */
+function planHoja(p) {
+  if (!p.tiene_plan) {
+    if (p.estado === 'listo') return '<p class="hoja-plan-vacio">Plan de fabricación: se define en el Puesto de taller al tocar "Iniciar".</p>';
+    return '';
+  }
+  return `
+    <section class="hoja-plan">
+      <h4>Plan de fabricación · ${p.etapas_completadas} de ${p.total_etapas} etapas completadas</h4>
+      <ol>${p.plan.map((e) => `
+        <li class="${e.estado}"><span class="hoja-plan-marca">${MARCA[e.estado]}</span>${e.orden}. ${esc(e.nombre)}
+          <small>${ESTADO[e.estado]}${e.fin ? ` · ${fechaHora(e.fin)}` : e.inicio ? ` · desde ${fechaHora(e.inicio)}` : ''}</small></li>`).join('')}
+      </ol>
+    </section>`;
+}
+
 export function hojaDeRutaHTML(p) {
   const indispensables = p.materiales.filter((m) => m.indispensable).map((m) => esc(m.descripcion)).join(', ');
   const emision = p.eventos.find((e) => e.tipo === 'recepcion');
@@ -20,6 +39,7 @@ export function hojaDeRutaHTML(p) {
         <dt>Materiales</dt><dd>${indispensables || '—'}</dd>
         <dt>Emitida</dt><dd>${emision ? fechaHora(emision.fecha_hora) : '—'}</dd>
       </dl>
+      ${planHoja(p)}
       <div class="hoja-codigo">
         ${codigoDeBarrasSVG(p.id, { modulo: 2, alto: 84 })}
         <div>${esc(p.id)}</div>

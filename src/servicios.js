@@ -69,6 +69,14 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     ultimoMovimiento: db.prepare('SELECT MAX(fecha_hora) AS f FROM evento WHERE id_proyecto = ?'),
     leerConfig: db.prepare('SELECT valor FROM config WHERE clave = ?'),
     guardarConfig: db.prepare('INSERT INTO config (clave, valor) VALUES (?, ?)'),
+    // Plan de fabricación y catálogo de etapas
+    etapasPedido: db.prepare('SELECT * FROM etapa_pedido WHERE id_proyecto = ? ORDER BY orden'),
+    insertarEtapaPedido: db.prepare('INSERT INTO etapa_pedido (id_proyecto, orden, nombre, inicio) VALUES (?, ?, ?, ?)'),
+    iniciarEtapaPedido: db.prepare('UPDATE etapa_pedido SET inicio = ? WHERE id = ? AND inicio IS NULL'),
+    completarEtapaPedido: db.prepare('UPDATE etapa_pedido SET fin = ? WHERE id = ? AND fin IS NULL'),
+    catalogoEtapas: db.prepare('SELECT nombre FROM etapa_catalogo ORDER BY id'),
+    agregarAlCatalogo: db.prepare('INSERT OR IGNORE INTO etapa_catalogo (nombre) VALUES (?)'),
+    primerEvento: db.prepare('SELECT fecha_hora FROM evento WHERE id_proyecto = ? AND tipo = ? ORDER BY id LIMIT 1'),
     recepcionPosterior: db.prepare(`SELECT fecha_hora FROM evento
       WHERE id_proyecto = ? AND tipo IN ('recepcion', 'recepcion_parcial') AND id > ? ORDER BY id LIMIT 1`),
   };
@@ -165,6 +173,11 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       dias_restantes_estimada: reglas.diasRestantes(fechaEstimada, hoy()),
       token_cliente: tokenCliente(p.id),
     };
+    Object.assign(v, resumenPlan(p.id));
+    // Hora en que quedó listo (Compras confirmó los materiales) e inicio real de la fabricación:
+    // la espera entre una y otra no es tiempo de fabricación.
+    v.listo_desde = q.primerEvento.get(p.id, 'recepcion')?.fecha_hora ?? null;
+    v.inicio_real = q.primerEvento.get(p.id, 'inicio')?.fecha_hora ?? null;
     if (p.estado === 'pausado') {
       const pausa = q.ultimoEvento.get(p.id, 'pausa');
       if (pausa) {
@@ -186,6 +199,37 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
 
   const horasEntre = (desde, hasta) => Math.max(0, (Date.parse(hasta) - Date.parse(desde)) / 3600000);
 
+  /**
+   * Plan de fabricación del pedido con el estado de cada etapa:
+   *  completada · en_curso · lista (la próxima, esperando "Iniciar etapa") · pendiente.
+   * Los pedidos anteriores al plan no tienen etapas: tiene_plan = false y siguen con su flujo de siempre.
+   */
+  function resumenPlan(idProyecto) {
+    const filas = q.etapasPedido.all(idProyecto);
+    let proximaMarcada = false;
+    const plan = filas.map((e) => {
+      let estado = 'pendiente';
+      if (e.fin) estado = 'completada';
+      else if (e.inicio) estado = 'en_curso';
+      else if (!proximaMarcada) { estado = 'lista'; proximaMarcada = true; }
+      return { orden: e.orden, nombre: e.nombre, estado, inicio: e.inicio, fin: e.fin };
+    });
+    const enCurso = plan.find((e) => e.estado === 'en_curso') || null;
+    // Si hay una etapa en curso, "lista" no aplica: la siguiente queda pendiente hasta completar la actual.
+    if (enCurso) plan.forEach((e) => { if (e.estado === 'lista') e.estado = 'pendiente'; });
+    const lista = plan.find((e) => e.estado === 'lista') || null;
+    const foco = enCurso || lista || plan[plan.length - 1] || null;
+    return {
+      tiene_plan: plan.length > 0,
+      plan,
+      etapas_completadas: plan.filter((e) => e.estado === 'completada').length,
+      total_etapas: plan.length,
+      etapa_numero: foco ? foco.orden : 0,
+      etapa_en_curso: Boolean(enCurso),
+      todas_completadas: plan.length > 0 && plan.every((e) => e.estado === 'completada'),
+    };
+  }
+
   /** Horas en proceso y horas en pausa de un proyecto, a partir de sus eventos. */
   function calcularTiempos(eventos) {
     let enProceso = 0;
@@ -197,10 +241,25 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       if (modo === 'proceso') enProceso += horasEntre(desde, hasta);
       if (modo === 'pausa') enPausa += horasEntre(desde, hasta);
     };
+    // Se trabaja cuando hay una etapa abierta y el pedido no está pausado.
+    // Entre "Completar etapa" e "Iniciar etapa" no corre ningún contador (la espera no es fabricación).
+    let etapaAbierta = false;
+    let pausado = false;
+    const pasarA = (nuevo, cuando) => {
+      if (nuevo === modo) return;
+      cerrar(cuando);
+      modo = nuevo;
+      desde = nuevo ? cuando : null;
+    };
+    const modoActual = () => (pausado ? 'pausa' : etapaAbierta ? 'proceso' : null);
     for (const e of eventos) {
-      if (e.tipo === 'inicio' || e.tipo === 'continuar') { cerrar(e.fecha_hora); desde = e.fecha_hora; modo = 'proceso'; }
-      else if (e.tipo === 'pausa') { cerrar(e.fecha_hora); desde = e.fecha_hora; modo = 'pausa'; }
-      else if (e.tipo === 'finalizar' || e.tipo === 'cancelar') { cerrar(e.fecha_hora); desde = null; modo = null; }
+      if (e.tipo === 'inicio' || e.tipo === 'etapa_inicio') etapaAbierta = true;
+      else if (e.tipo === 'etapa_fin') etapaAbierta = false;
+      else if (e.tipo === 'pausa') pausado = true;
+      else if (e.tipo === 'continuar') pausado = false;
+      else if (e.tipo === 'finalizar' || e.tipo === 'cancelar') { etapaAbierta = false; pausado = false; }
+      else continue;
+      pasarA(modoActual(), e.fecha_hora);
     }
     cerrar(instante());
     return { horas_en_proceso: enProceso, horas_en_pausa: enPausa };
@@ -275,6 +334,11 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     };
   }
 
+  /** Etapas guardadas por el taller (sugerencias del Plan de fabricación), en el orden en que se crearon. */
+  function catalogoEtapas() {
+    return q.catalogoEtapas.all().map((e) => e.nombre);
+  }
+
   function listarProyectos() {
     return q.proyectos.all().map(vista).sort(reglas.compararParaPanel);
   }
@@ -315,14 +379,19 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
   /** Causas de demora más frecuentes y horas detenidas (base de los KPI). */
   function indicadores() {
     const porCausa = new Map(reglas.CAUSAS.map((c) => [c, { causa: c, pausas: 0, horas: 0 }]));
-    const porEtapa = new Map(reglas.ETAPAS.map((e) => [e, { etapa: e, pausas: 0, horas: 0 }]));
+    // Etapas del catálogo del taller (y las de pedidos anteriores que tengan pausas).
+    const porEtapa = new Map(q.catalogoEtapas.all().map(({ nombre }) => [nombre, { etapa: nombre, pausas: 0, horas: 0 }]));
     const abiertas = new Map(); // id_proyecto -> evento de pausa sin cerrar
     const sumar = (pausa, hasta) => {
       const horas = horasEntre(pausa.fecha_hora, hasta);
       const c = porCausa.get(pausa.causa);
       if (c) { c.pausas += 1; c.horas += horas; }
-      const e = porEtapa.get(pausa.etapa);
-      if (e) { e.pausas += 1; e.horas += horas; }
+      if (pausa.etapa) {
+        if (!porEtapa.has(pausa.etapa)) porEtapa.set(pausa.etapa, { etapa: pausa.etapa, pausas: 0, horas: 0 });
+        const e = porEtapa.get(pausa.etapa);
+        e.pausas += 1;
+        e.horas += horas;
+      }
     };
     for (const e of q.todosLosEventos.all()) {
       if (e.tipo === 'pausa') abiertas.set(e.id_proyecto, e);
@@ -476,7 +545,8 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     const usuarios = q.usuarios.all();
     const usuarioDe = (rol) => (usuarios.find((u) => u.rol === rol) || usuarios.find((u) => u.rol === 'Supervisor') || usuarios[0]).id;
     transaccion(db, () => {
-      db.exec('DELETE FROM evento; DELETE FROM material; DELETE FROM proyecto; DELETE FROM cliente;');
+      // Los planes de los pedidos se reemplazan junto con los pedidos; el catálogo de etapas del taller se conserva.
+      db.exec('DELETE FROM etapa_pedido; DELETE FROM evento; DELETE FROM material; DELETE FROM proyecto; DELETE FROM cliente;');
       db.exec("DELETE FROM sqlite_sequence WHERE name IN ('evento', 'material', 'cliente');");
       for (const c of analisis.clientes_nuevos) q.insertarCliente.run(c.nombre, c.codigo);
       const idCliente = new Map(q.clientes.all().map((c) => [c.codigo, c.id]));
@@ -622,18 +692,114 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
   // ---------- Acciones del taller ----------
   const ROLES_TALLER = ['Operario', 'Supervisor'];
 
+  /** Valida y limpia la lista de etapas que manda el formulario "Plan de fabricación". */
+  function validarPlan(lista) {
+    if (!Array.isArray(lista)) return null;
+    const etapas = lista.map((e) => texto(e).replace(/\s+/g, ' '));
+    if (!etapas.length || etapas.some((e) => !e)) throw new ErrorNegocio('Agregá al menos una etapa al plan de fabricación.');
+    if (etapas.length > reglas.MAX_ETAPAS_PLAN) throw new ErrorNegocio(`El plan puede tener hasta ${reglas.MAX_ETAPAS_PLAN} etapas.`);
+    if (etapas.some((e) => e.length > 40)) throw new ErrorNegocio('El nombre de cada etapa puede tener hasta 40 letras.');
+    const vistas = new Set();
+    for (const e of etapas) {
+      const clave = e.toLocaleLowerCase('es');
+      if (vistas.has(clave)) throw new ErrorNegocio(`La etapa "${e}" está repetida en el plan.`);
+      vistas.add(clave);
+    }
+    return etapas;
+  }
+
+  /**
+   * Inicio real de la fabricación. Con plan (el flujo actual del Puesto de taller), en una sola operación:
+   * guarda el plan ordenado, agrega sus etapas al catálogo, registra el inicio del pedido e inicia la primera etapa.
+   * Si llega dos veces el mismo pedido (doble clic o reintento) no se duplica nada: se devuelve el estado guardado.
+   * Sin plan se mantiene el inicio anterior (etapa de la lista fija), para compatibilidad.
+   */
   function iniciar(id, datos = {}) {
     const usuario = exigirRol(datos.id_usuario, ROLES_TALLER, 'registrar avances del taller');
     const p = buscarProyecto(id);
+    const plan = validarPlan(datos.plan);
     if (p.estado === 'pendiente_mat') {
       throw new ErrorNegocio('No se puede iniciar: faltan los materiales indispensables. Compras tiene que registrar la recepción.', 409);
     }
+    if (plan && ['en_proceso', 'pausado'].includes(p.estado)) {
+      const guardado = q.etapasPedido.all(p.id).map((e) => e.nombre);
+      if (guardado.length === plan.length && guardado.every((e, i) => e === plan[i])) return obtenerProyecto(p.id);
+    }
     if (p.estado !== 'listo') throw new ErrorNegocio(`No se puede iniciar: el trabajo está "${reglas.ESTADOS[p.estado]}".`, 409);
+
+    if (plan) {
+      return transaccion(db, () => {
+        const momento = instante();
+        plan.forEach((nombre, i) => {
+          q.insertarEtapaPedido.run(p.id, i + 1, nombre, i === 0 ? momento : null);
+          q.agregarAlCatalogo.run(nombre);
+        });
+        q.estadoYEtapa.run('en_proceso', plan[0], p.id);
+        q.insertarEvento.run(p.id, 'inicio', momento, usuario.id, plan[0], null, `Plan: ${plan.join(' → ')}`);
+        return obtenerProyecto(p.id);
+      });
+    }
+
     const etapa = texto(datos.etapa) || reglas.ETAPAS[0];
     if (!reglas.ETAPAS.includes(etapa)) throw new ErrorNegocio('La etapa elegida no existe.');
     return transaccion(db, () => {
       q.estadoYEtapa.run('en_proceso', etapa, p.id);
       registrarEvento(p.id, 'inicio', usuario.id, { etapa });
+      return obtenerProyecto(p.id);
+    });
+  }
+
+  /** Etapas del plan guardado, con la que está en curso y la próxima por iniciar. */
+  function etapasDelPlan(idProyecto) {
+    const filas = q.etapasPedido.all(idProyecto);
+    return {
+      filas,
+      enCurso: filas.find((e) => e.inicio && !e.fin) || null,
+      proxima: filas.find((e) => !e.inicio) || null,
+    };
+  }
+
+  /** "Completar etapa": registra el fin de la etapa en curso; la siguiente queda lista para iniciar. */
+  function completarEtapa(id, datos = {}) {
+    const usuario = exigirRol(datos.id_usuario, ROLES_TALLER, 'registrar avances del taller');
+    const p = buscarProyecto(id);
+    const { filas, enCurso, proxima } = etapasDelPlan(p.id);
+    if (!filas.length) throw new ErrorNegocio('Este pedido no tiene plan de fabricación: se trabaja con el flujo anterior.', 409);
+    if (p.estado === 'pausado') throw new ErrorNegocio('El pedido está pausado: tocá "Continuar" antes de completar la etapa.', 409);
+    if (p.estado !== 'en_proceso') throw new ErrorNegocio(`No se puede completar la etapa: el pedido está "${reglas.ESTADOS[p.estado]}".`, 409);
+    if (!enCurso) throw new ErrorNegocio('No hay ninguna etapa en curso para completar.', 409);
+    if (datos.etapa && texto(datos.etapa) !== enCurso.nombre) {
+      throw new ErrorNegocio(`La etapa en curso es "${enCurso.nombre}". Actualizá la pantalla.`, 409);
+    }
+    return transaccion(db, () => {
+      q.completarEtapaPedido.run(instante(), enCurso.id);
+      if (proxima) q.etapa.run(proxima.nombre, p.id);
+      registrarEvento(p.id, 'etapa_fin', usuario.id, { etapa: enCurso.nombre });
+      return obtenerProyecto(p.id);
+    });
+  }
+
+  /** "Iniciar etapa": la espera entre etapas termina acá, y desde acá corre el tiempo de trabajo. */
+  function iniciarEtapa(id, datos = {}) {
+    const usuario = exigirRol(datos.id_usuario, ROLES_TALLER, 'registrar avances del taller');
+    const p = buscarProyecto(id);
+    const { filas, enCurso, proxima } = etapasDelPlan(p.id);
+    if (!filas.length) throw new ErrorNegocio('Este pedido no tiene plan de fabricación: se trabaja con el flujo anterior.', 409);
+    if (p.estado === 'pausado') throw new ErrorNegocio('El pedido está pausado: tocá "Continuar" antes de iniciar la etapa.', 409);
+    if (p.estado !== 'en_proceso') throw new ErrorNegocio(`No se puede iniciar la etapa: el pedido está "${reglas.ESTADOS[p.estado]}".`, 409);
+    if (enCurso) {
+      // Doble clic o reintento sobre la misma etapa: no se duplica el inicio.
+      if (datos.etapa && texto(datos.etapa) === enCurso.nombre) return obtenerProyecto(p.id);
+      throw new ErrorNegocio(`La etapa "${enCurso.nombre}" sigue en curso: completala antes de iniciar otra.`, 409);
+    }
+    if (!proxima) throw new ErrorNegocio('Todas las etapas están completadas: ya se puede finalizar el pedido.', 409);
+    if (datos.etapa && texto(datos.etapa) !== proxima.nombre) {
+      throw new ErrorNegocio(`La próxima etapa es "${proxima.nombre}". Actualizá la pantalla.`, 409);
+    }
+    return transaccion(db, () => {
+      q.iniciarEtapaPedido.run(instante(), proxima.id);
+      q.etapa.run(proxima.nombre, p.id);
+      registrarEvento(p.id, 'etapa_inicio', usuario.id, { etapa: proxima.nombre });
       return obtenerProyecto(p.id);
     });
   }
@@ -650,7 +816,9 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     if (detalle.length > 300) throw new ErrorNegocio('La descripción es demasiado larga.');
     return transaccion(db, () => {
       q.estado.run('pausado', p.id);
-      registrarEvento(p.id, 'pausa', usuario.id, { etapa: p.etapa_actual, causa, detalle });
+      const { enCurso, proxima } = etapasDelPlan(p.id);
+      const etapa = (enCurso || proxima)?.nombre ?? p.etapa_actual;
+      registrarEvento(p.id, 'pausa', usuario.id, { etapa, causa, detalle });
       return obtenerProyecto(p.id);
     });
   }
@@ -661,7 +829,9 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     if (p.estado !== 'pausado') throw new ErrorNegocio(`No se puede continuar: el trabajo está "${reglas.ESTADOS[p.estado]}".`, 409);
     return transaccion(db, () => {
       q.estado.run('en_proceso', p.id);
-      registrarEvento(p.id, 'continuar', usuario.id, { etapa: p.etapa_actual });
+      // Se reanuda la misma etapa que se pausó.
+      const pausa = q.ultimoEvento.get(p.id, 'pausa');
+      registrarEvento(p.id, 'continuar', usuario.id, { etapa: pausa?.etapa ?? p.etapa_actual });
       return obtenerProyecto(p.id);
     });
   }
@@ -670,6 +840,11 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     const usuario = exigirRol(datos.id_usuario, ROLES_TALLER, 'registrar avances del taller');
     const p = buscarProyecto(id);
     if (p.estado !== 'en_proceso') throw new ErrorNegocio(`No se puede finalizar: el trabajo está "${reglas.ESTADOS[p.estado]}".`, 409);
+    const { filas } = etapasDelPlan(p.id);
+    const faltan = filas.filter((e) => !e.fin);
+    if (faltan.length) {
+      throw new ErrorNegocio(`Todavía no se puede finalizar: falta completar ${faltan.map((e) => `"${e.nombre}"`).join(', ')}.`, 409);
+    }
     return transaccion(db, () => {
       q.estado.run('finalizado', p.id);
       registrarEvento(p.id, 'finalizar', usuario.id, { etapa: p.etapa_actual });
@@ -682,6 +857,9 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     const p = buscarProyecto(id);
     const etapa = texto(datos.etapa);
     if (p.estado !== 'en_proceso') throw new ErrorNegocio('La etapa solo se puede cambiar con el trabajo en proceso.', 409);
+    if (q.etapasPedido.all(p.id).length) {
+      throw new ErrorNegocio('Este pedido tiene plan de fabricación: usá "Completar etapa" e "Iniciar etapa".', 409);
+    }
     if (!reglas.ETAPAS.includes(etapa)) throw new ErrorNegocio('La etapa elegida no existe.');
     if (etapa === p.etapa_actual) return obtenerProyecto(p.id);
     return transaccion(db, () => {
@@ -704,7 +882,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
   return {
     catalogo, listarProyectos, obtenerProyecto, seguimientoCliente, alertas, indicadores, planilla, historialPausas, datosDashboard,
     crearProyecto, importarPlanilla, reprogramar, registrarRecepcion, registrarRecepcionParcial,
-    iniciar, pausar, continuar, finalizar, cambiarEtapa,
+    iniciar, pausar, continuar, finalizar, cambiarEtapa, completarEtapa, iniciarEtapa, catalogoEtapas,
     restablecerDemo, inicializarSiEstaVacia,
   };
 }
