@@ -11,8 +11,9 @@ import taller from './vistas/taller.js';
 import historial from './vistas/historial.js';
 import planilla from './vistas/planilla.js';
 import dashboard from './vistas/dashboard.js';
+import cliente from './vistas/cliente.js';
 
-const VISTAS = { panel, dashboard, alta, compras, taller, historial, planilla };
+const VISTAS = { panel, dashboard, alta, compras, taller, historial, planilla, cliente };
 const $ = (selector) => document.querySelector(selector);
 
 let catalogo = null;

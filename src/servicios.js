@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('node:crypto');
 /**
  * Casos de uso del sistema. Cada función valida las reglas de negocio,
  * guarda los cambios y deja registrado el evento correspondiente.
@@ -64,9 +65,23 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       FROM evento e JOIN usuario u ON u.id = e.id_usuario ORDER BY e.id`),
     ultimoEvento: db.prepare(`SELECT e.*, u.nombre AS usuario FROM evento e JOIN usuario u ON u.id = e.id_usuario
       WHERE e.id_proyecto = ? AND e.tipo = ? ORDER BY e.id DESC LIMIT 1`),
+    eventosLivianos: db.prepare('SELECT tipo, fecha_hora FROM evento WHERE id_proyecto = ? ORDER BY id'),
+    ultimoMovimiento: db.prepare('SELECT MAX(fecha_hora) AS f FROM evento WHERE id_proyecto = ?'),
+    leerConfig: db.prepare('SELECT valor FROM config WHERE clave = ?'),
+    guardarConfig: db.prepare('INSERT INTO config (clave, valor) VALUES (?, ?)'),
     recepcionPosterior: db.prepare(`SELECT fecha_hora FROM evento
       WHERE id_proyecto = ? AND tipo IN ('recepcion', 'recepcion_parcial') AND id > ? ORDER BY id LIMIT 1`),
   };
+
+  // ---------- Link de seguimiento del cliente ----------
+  // Cada proyecto tiene un link propio, firmado con una clave secreta que se crea una sola vez.
+  // Así el cliente no puede adivinar el link de otro proyecto cambiando el ID.
+  let secreto = q.leerConfig.get('secreto_seguimiento')?.valor;
+  if (!secreto) {
+    secreto = crypto.randomBytes(32).toString('hex');
+    q.guardarConfig.run('secreto_seguimiento', secreto);
+  }
+  const tokenCliente = (id) => crypto.createHmac('sha256', secreto).update(id).digest('base64url').slice(0, 22);
 
   // ---------- Auxiliares ----------
   function registrarEvento(idProyecto, tipo, idUsuario, extra = {}) {
@@ -92,9 +107,35 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     return fila;
   }
 
-  /** Agrega al proyecto los datos calculados: días, semáforo, pausa actual, fecha de fin. */
+  /**
+   * Horas que el trabajo estuvo detenido desde el último plazo acordado.
+   * Si Gerencia reprogramó el plazo, las pausas anteriores ya están contempladas en la fecha nueva,
+   * así que se cuenta desde la reprogramación. Una pausa abierta se cuenta hasta este momento.
+   */
+  function horasPausaDesdeElPlazo(eventos) {
+    let horas = 0;
+    let pausaDesde = null;
+    for (const e of eventos) {
+      if (e.tipo === 'reprogramar') {
+        horas = 0;
+        if (pausaDesde) pausaDesde = e.fecha_hora;
+      } else if (e.tipo === 'pausa') {
+        if (!pausaDesde) pausaDesde = e.fecha_hora;
+      } else if (['continuar', 'finalizar', 'cancelar'].includes(e.tipo) && pausaDesde) {
+        horas += horasEntre(pausaDesde, e.fecha_hora);
+        pausaDesde = null;
+      }
+    }
+    if (pausaDesde) horas += horasEntre(pausaDesde, instante());
+    return horas;
+  }
+
+  /** Agrega al proyecto los datos calculados: días, semáforo, pausa actual, fecha de fin, entrega estimada. */
   function vista(p) {
     const dias = reglas.diasRestantes(p.plazo_entrega, hoy());
+    const horasPausa = horasPausaDesdeElPlazo(q.eventosLivianos.all(p.id));
+    const corrimiento = reglas.diasDeCorrimiento(horasPausa);
+    const fechaEstimada = reglas.sumarDias(p.plazo_entrega, corrimiento);
     const v = {
       id: p.id,
       numero: p.numero,
@@ -117,6 +158,12 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       pausa_actual: null,
       material_recibido_tras_pausa: false,
       fecha_fin: null,
+      // Entrega estimada = plazo de la empresa + días detenidos (lo recalcula el sistema con cada pausa).
+      horas_pausa_plazo: horasPausa,
+      dias_corrimiento: corrimiento,
+      fecha_estimada: fechaEstimada,
+      dias_restantes_estimada: reglas.diasRestantes(fechaEstimada, hoy()),
+      token_cliente: tokenCliente(p.id),
     };
     if (p.estado === 'pausado') {
       const pausa = q.ultimoEvento.get(p.id, 'pausa');
@@ -128,6 +175,11 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     if (p.estado === 'finalizado') {
       const fin = q.ultimoEvento.get(p.id, 'finalizar');
       v.fecha_fin = fin ? fin.fecha_hora : null;
+    }
+    v.cancelacion = null;
+    if (p.estado === 'cancelado') {
+      const cancelacion = q.ultimoEvento.get(p.id, 'cancelar');
+      v.cancelacion = cancelacion ? { fecha: cancelacion.fecha_hora, motivo: cancelacion.detalle } : { fecha: null, motivo: null };
     }
     return v;
   }
@@ -148,7 +200,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     for (const e of eventos) {
       if (e.tipo === 'inicio' || e.tipo === 'continuar') { cerrar(e.fecha_hora); desde = e.fecha_hora; modo = 'proceso'; }
       else if (e.tipo === 'pausa') { cerrar(e.fecha_hora); desde = e.fecha_hora; modo = 'pausa'; }
-      else if (e.tipo === 'finalizar') { cerrar(e.fecha_hora); desde = null; modo = null; }
+      else if (e.tipo === 'finalizar' || e.tipo === 'cancelar') { cerrar(e.fecha_hora); desde = null; modo = null; }
     }
     cerrar(instante());
     return { horas_en_proceso: enProceso, horas_en_pausa: enPausa };
@@ -190,7 +242,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
         };
         pausas.push(pausa);
         abiertas.set(e.id_proyecto, pausa);
-      } else if (e.tipo === 'continuar' || e.tipo === 'finalizar') {
+      } else if (e.tipo === 'continuar' || e.tipo === 'finalizar' || e.tipo === 'cancelar') {
         cerrar(e.id_proyecto, e);
       }
     }
@@ -253,7 +305,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     });
     const porFaltaDeMaterial = proyectos.filter((p) => p.pausa_actual && p.pausa_actual.causa === 'Falta de material');
     return {
-      vencidos: proyectos.filter((p) => p.estado !== 'finalizado' && p.dias_restantes < 0).map(breve),
+      vencidos: proyectos.filter((p) => !['finalizado', 'cancelado'].includes(p.estado) && p.dias_restantes < 0).map(breve),
       falta_material: porFaltaDeMaterial.filter((p) => !p.material_recibido_tras_pausa).map(breve),
       material_recibido: porFaltaDeMaterial.filter((p) => p.material_recibido_tras_pausa).map(breve),
       por_vencer: proyectos.filter((p) => p.semaforo === 'amarillo').map(breve),
@@ -274,7 +326,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     };
     for (const e of q.todosLosEventos.all()) {
       if (e.tipo === 'pausa') abiertas.set(e.id_proyecto, e);
-      else if ((e.tipo === 'continuar' || e.tipo === 'finalizar') && abiertas.has(e.id_proyecto)) {
+      else if (['continuar', 'finalizar', 'cancelar'].includes(e.tipo) && abiertas.has(e.id_proyecto)) {
         sumar(abiertas.get(e.id_proyecto), e.fecha_hora);
         abiertas.delete(e.id_proyecto);
       }
@@ -306,7 +358,8 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       fecha_fin: p.fecha_fin ? reglas.fechaLocal(new Date(p.fecha_fin)) : '',
       estado: p.estado_texto,
       etapa: p.etapa_actual,
-      motivo_demora: p.pausa_actual ? `${p.pausa_actual.causa}: ${p.pausa_actual.detalle}` : '',
+      motivo_demora: p.pausa_actual ? `${p.pausa_actual.causa}: ${p.pausa_actual.detalle}`
+        : (p.cancelacion && p.cancelacion.motivo ? `Cancelado: ${p.cancelacion.motivo}` : ''),
       cantidad_pausas: pausas.get(p.id)?.cantidad ?? 0,
       horas_detenido: pausas.get(p.id)?.horas ?? 0,
     }));
@@ -354,10 +407,45 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     };
   }
 
+  /**
+   * Lo que ve el cliente con su link: estado, etapa, plazo y entrega estimada.
+   * No incluye causas internas, nombres de operarios ni datos de otros proyectos.
+   */
+  function seguimientoCliente(token) {
+    const buscado = String(token || '');
+    const p = buscado.length === 22 ? q.proyectos.all().find((x) => {
+      const propio = Buffer.from(tokenCliente(x.id));
+      const recibido = Buffer.from(buscado);
+      return propio.length === recibido.length && crypto.timingSafeEqual(propio, recibido);
+    }) : null;
+    if (!p) throw new ErrorNegocio('El link de seguimiento no es válido. Pedile a Lima Mecanizados que te lo vuelva a enviar.', 404);
+    const v = vista(p);
+    return {
+      id: v.id,
+      nombre: v.nombre,
+      descripcion: v.descripcion,
+      cliente: v.cliente,
+      estado: v.estado,
+      estado_texto: reglas.ESTADOS_CLIENTE[v.estado],
+      // Etapas pensadas para el cliente; el detalle de operaciones (Corte, Soldadura…) queda en el panel interno.
+      pasos: reglas.pasosCliente(v.estado),
+      fecha_ingreso: v.fecha_ingreso,
+      plazo_entrega: v.plazo_entrega,
+      fecha_estimada: v.fecha_estimada,
+      dias_corrimiento: v.dias_corrimiento,
+      // La fecha estimada ya pasó y el trabajo no terminó: la empresa tiene que confirmar una nueva.
+      en_revision: !['finalizado', 'cancelado'].includes(v.estado) && v.dias_restantes_estimada < 0,
+      fecha_fin: v.fecha_fin,
+      ultima_actualizacion: q.ultimoMovimiento.get(p.id)?.f ?? null,
+      hoy: hoy(),
+    };
+  }
+
   // ---------- Acciones de Gerencia ----------
   /**
-   * Carga proyectos desde un Excel. Primero se llama sin confirmar (vista previa: no guarda nada)
-   * y después con confirmar = true. Los ID que ya existen nunca se pisan.
+   * Carga los proyectos de un Excel y REEMPLAZA a los que hay en el sistema
+   * (la planilla queda igual al Excel: no se suman). Los usuarios no se tocan.
+   * Primero se llama sin confirmar (vista previa: no guarda nada) y después con confirmar = true.
    */
   function importarPlanilla(archivo, { id_usuario: idUsuario, confirmar = false } = {}) {
     exigirRol(idUsuario, ['Gerencia'], 'cargar proyectos desde Excel');
@@ -368,16 +456,15 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       if (error instanceof ErrorArchivo) throw new ErrorNegocio(error.message);
       throw new ErrorNegocio('No se pudo leer el archivo. Verificá que sea un Excel (.xlsx).');
     }
-    const clientes = new Map(q.clientes.all().map((c) => [c.codigo, c.nombre]));
-    const analisis = analizarLibro(libro, {
-      existentes: new Set(q.proyectos.all().map((p) => p.id)), clientes, ahora: ahora(),
-    });
+    // Como el Excel reemplaza todo, se analiza como si el sistema estuviera vacío.
+    const analisis = analizarLibro(libro, { existentes: new Set(), clientes: new Map(), ahora: ahora() });
     if (analisis.error) throw new ErrorNegocio(analisis.error);
 
     const resumen = {
       hoja: analisis.hoja,
       filas: analisis.filas,
       nuevos: analisis.nuevos.length,
+      actuales: q.proyectos.all().length,
       por_estado: analisis.por_estado,
       clientes_nuevos: analisis.clientes_nuevos,
       omitidos: analisis.omitidos,
@@ -389,6 +476,8 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     const usuarios = q.usuarios.all();
     const usuarioDe = (rol) => (usuarios.find((u) => u.rol === rol) || usuarios.find((u) => u.rol === 'Supervisor') || usuarios[0]).id;
     transaccion(db, () => {
+      db.exec('DELETE FROM evento; DELETE FROM material; DELETE FROM proyecto; DELETE FROM cliente;');
+      db.exec("DELETE FROM sqlite_sequence WHERE name IN ('evento', 'material', 'cliente');");
       for (const c of analisis.clientes_nuevos) q.insertarCliente.run(c.nombre, c.codigo);
       const idCliente = new Map(q.clientes.all().map((c) => [c.codigo, c.id]));
       const insertarProyecto = db.prepare(`INSERT INTO proyecto
@@ -483,6 +572,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     const plazo = texto(datos.plazo_entrega);
     const motivo = texto(datos.motivo);
     if (p.estado === 'finalizado') throw new ErrorNegocio('El trabajo ya está finalizado: no se puede reprogramar.');
+    if (p.estado === 'cancelado') throw new ErrorNegocio('El proyecto está cancelado: no se puede reprogramar.');
     if (!reglas.esFechaValida(plazo)) throw new ErrorNegocio('Elegí la nueva fecha de entrega.');
     if (plazo === p.plazo_entrega) throw new ErrorNegocio('La nueva fecha es igual a la actual.');
     if (plazo < hoy()) throw new ErrorNegocio('El nuevo plazo no puede ser anterior a hoy.');
@@ -519,6 +609,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       throw new ErrorNegocio('Este proyecto todavía espera sus materiales indispensables: registrá primero la recepción.');
     }
     if (p.estado === 'finalizado') throw new ErrorNegocio('El trabajo ya está finalizado.');
+    if (p.estado === 'cancelado') throw new ErrorNegocio('El proyecto está cancelado.');
     if (!material) throw new ErrorNegocio('Escribí qué material llegó.');
     if (material.length > 120) throw new ErrorNegocio('La descripción del material es demasiado larga.');
     return transaccion(db, () => {
@@ -611,7 +702,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
   }
 
   return {
-    catalogo, listarProyectos, obtenerProyecto, alertas, indicadores, planilla, historialPausas, datosDashboard,
+    catalogo, listarProyectos, obtenerProyecto, seguimientoCliente, alertas, indicadores, planilla, historialPausas, datosDashboard,
     crearProyecto, importarPlanilla, reprogramar, registrarRecepcion, registrarRecepcionParcial,
     iniciar, pausar, continuar, finalizar, cambiarEtapa,
     restablecerDemo, inicializarSiEstaVacia,

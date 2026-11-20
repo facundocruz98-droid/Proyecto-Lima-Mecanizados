@@ -717,3 +717,24 @@ textarea { min-height: 84px; resize: vertical; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Entrega estimada: días que se corrió la fecha por pausas */
+.corrida { color: var(--mal); font-weight: 600; }
+.celda-acciones.apiladas { white-space: normal; }
+.celda-acciones.apiladas .boton { display: flex; width: 100%; justify-content: center; margin: 0 0 6px; }
+.celda-acciones.apiladas .boton + .boton { margin-left: 0; }
+
+/* Seguimiento del cliente: datos a la izquierda, vista previa en un "celular" a la derecha */
+.cliente-vista { display: grid; grid-template-columns: minmax(280px, 1fr) 400px; gap: 20px; align-items: start; }
+.cliente-celular { background: #15202d; border-radius: 34px; padding: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .18); }
+.cliente-celular iframe { display: block; width: 100%; height: 760px; border: 0; border-radius: 24px; background: #f3f5f8; }
+@media (max-width: 1100px) { .cliente-vista { grid-template-columns: 1fr; } .cliente-celular { max-width: 400px; } }
+
+/* Proyectos cancelados */
+.pastilla.cancelado { background: var(--neutro-fondo); color: var(--mal); }
+.fila-cancelado td:first-child { box-shadow: inset 4px 0 0 var(--borde-fuerte); }
+.fila-cancelado { color: var(--texto-suave); }
+.fila-cancelado strong { text-decoration: line-through; text-decoration-color: var(--texto-tenue); }
+.indicadores { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 900px) { .indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.punto.p-cancelar { background: var(--neutro); box-shadow: 0 0 0 2px var(--neutro); }

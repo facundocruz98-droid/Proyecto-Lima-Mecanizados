@@ -15,9 +15,46 @@ const ESTADOS = {
   en_proceso: 'En proceso',
   pausado: 'Pausado',
   finalizado: 'Finalizado',
+  cancelado: 'Cancelado',
 };
 
 const ROLES = ['Gerencia', 'Compras', 'Operario', 'Supervisor'];
+
+/** Cómo ve el cliente cada estado en su link de seguimiento (sin datos internos). */
+const ESTADOS_CLIENTE = {
+  pendiente_mat: 'En preparación: esperando materiales',
+  listo: 'Listo para comenzar la fabricación',
+  en_proceso: 'En fabricación',
+  pausado: 'Detenido momentáneamente',
+  finalizado: 'Terminado',
+  cancelado: 'Cancelado',
+};
+
+/**
+ * Etapas que ve el cliente en su link (en lugar de Corte, Plegado, Soldadura…).
+ * Salen solo del estado del proyecto:
+ *  - pendiente_mat / listo      → actual: Pedido recibido
+ *  - en_proceso / pausado       → actual: En fabricación
+ *  - finalizado                 → línea completa: Listo para entregar y Entregado se muestran cumplidas.
+ *    Es solo visual (para la demo): el sistema no registra despachos ni entregas.
+ *  - cancelado                  → sin línea (la página muestra el aviso de cancelación)
+ * "En camino" no se muestra porque el sistema no registra el despacho.
+ */
+const PASOS_CLIENTE = [
+  { clave: 'recibido', titulo: 'Pedido recibido' },
+  { clave: 'fabricacion', titulo: 'En fabricación' },
+  { clave: 'listo', titulo: 'Listo para entregar' },
+  { clave: 'entregado', titulo: 'Entregado' },
+];
+
+function pasosCliente(estado) {
+  if (estado === 'cancelado') return [];
+  const actual = { pendiente_mat: 0, listo: 0, en_proceso: 1, pausado: 1, finalizado: 3 }[estado] ?? 0;
+  return PASOS_CLIENTE.map((p, i) => ({
+    ...p,
+    estado: i < actual ? 'hecha' : i === actual ? 'actual' : 'pendiente',
+  }));
+}
 
 /** Días de anticipación de la alerta preventiva (semáforo amarillo). */
 const MARGEN_ALERTA_DIAS = 2;
@@ -68,21 +105,40 @@ function diasRestantes(plazo, hoy) {
   return Math.round((aUTC(plazo) - aUTC(hoy)) / 86400000);
 }
 
+/** Suma (o resta) días a una fecha AAAA-MM-DD. */
+function sumarDias(fecha, dias) {
+  const [a, m, d] = fecha.split('-').map(Number);
+  const f = new Date(Date.UTC(a, m - 1, d + dias));
+  return f.toISOString().slice(0, 10);
+}
+
+/**
+ * Días que se corre la entrega por el tiempo detenido.
+ * Cada día (24 h) o fracción de pausa corre la fecha estimada un día:
+ * es preferible avisarle al cliente una fecha un poco más tarde que una que no se cumpla.
+ */
+function diasDeCorrimiento(horasPausa) {
+  if (!(horasPausa > 0)) return 0;
+  return Math.ceil(horasPausa / 24 - 1e-9);
+}
+
 /**
  * Semáforo del panel:
  *  - fin:      el trabajo está finalizado
+ *  - cancelado: el proyecto se canceló
  *  - rojo:     plazo vencido sin finalizar, o trabajo pausado
  *  - amarillo: faltan MARGEN_ALERTA_DIAS días o menos
  *  - verde:    a tiempo
  */
 function semaforo(estado, dias) {
   if (estado === 'finalizado') return 'fin';
+  if (estado === 'cancelado') return 'cancelado';
   if (dias < 0 || estado === 'pausado') return 'rojo';
   if (dias <= MARGEN_ALERTA_DIAS) return 'amarillo';
   return 'verde';
 }
 
-const ORDEN_SEMAFORO = { rojo: 0, amarillo: 1, verde: 2, fin: 3 };
+const ORDEN_SEMAFORO = { rojo: 0, amarillo: 1, verde: 2, fin: 3, cancelado: 4 };
 
 /** Orden del panel: color, después urgentes, después plazo más cercano. */
 function compararParaPanel(a, b) {
@@ -98,6 +154,9 @@ module.exports = {
   ETAPAS,
   CAUSAS,
   ESTADOS,
+  ESTADOS_CLIENTE,
+  PASOS_CLIENTE,
+  pasosCliente,
   ROLES,
   MARGEN_ALERTA_DIAS,
   FORMATO_ID,
@@ -106,6 +165,8 @@ module.exports = {
   esFechaValida,
   fechaLocal,
   diasRestantes,
+  sumarDias,
+  diasDeCorrimiento,
   semaforo,
   compararParaPanel,
 };

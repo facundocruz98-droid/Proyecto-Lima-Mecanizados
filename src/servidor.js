@@ -6,6 +6,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const { abrirBase } = require('./db');
 const { crearServicios, ErrorNegocio } = require('./servicios');
 const { crearLibro, fechaExcel, fechaHoraExcel, duracionExcel } = require('./excel');
@@ -203,7 +204,16 @@ function crearServidor({ rutaBase, ahora } = {}) {
     const { method } = req;
 
     if (method === 'GET') {
-      if (ruta === '/api/catalogo') return responderJSON(res, 200, servicios.catalogo());
+      if (ruta === '/api/catalogo') {
+        // Direcciones de red de esta PC: sirven para armar el link del cliente aunque Gerencia entre por "localhost".
+        const puerto = req.socket.localPort;
+        const red = Object.values(os.networkInterfaces()).flat()
+          .filter((r) => r && r.family === 'IPv4' && !r.internal)
+          .map((r) => `http://${r.address}:${puerto}`);
+        return responderJSON(res, 200, { ...servicios.catalogo(), direcciones_red: red });
+      }
+      const seguimiento = /^\/api\/seguimiento\/([^/]+)$/.exec(ruta);
+      if (seguimiento) return responderJSON(res, 200, servicios.seguimientoCliente(decodeURIComponent(seguimiento[1])));
       if (ruta === '/api/proyectos') return responderJSON(res, 200, servicios.listarProyectos());
       if (ruta === '/api/alertas') return responderJSON(res, 200, servicios.alertas());
       if (ruta === '/api/indicadores') return responderJSON(res, 200, servicios.indicadores());

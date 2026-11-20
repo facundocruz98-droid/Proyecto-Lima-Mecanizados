@@ -11,11 +11,19 @@ let temporizadorResaltado = null;
 function filaProyecto(p) {
   const pausa = p.pausa_actual
     ? `<div class="motivo">Pausado · ${esc(p.pausa_actual.causa)}: ${esc(p.pausa_actual.detalle)}</div>`
-    : '';
-  const plazo = p.estado === 'finalizado'
-    ? `<div class="chico suave">finalizado el ${fechaDeInstante(p.fecha_fin)}</div>`
-    : `<div class="chico suave">${textoPlazo(p.dias_restantes)}</div>`;
-  const reprogramar = p.estado === 'finalizado'
+    : (p.cancelacion && p.cancelacion.motivo ? `<div class="chico suave">Cancelado · ${esc(p.cancelacion.motivo)}</div>` : '');
+  const cerrado = p.estado === 'finalizado' || p.estado === 'cancelado';
+  let plazo = `<div class="chico suave">${textoPlazo(p.dias_restantes)}</div>`;
+  if (p.estado === 'finalizado') plazo = `<div class="chico suave">finalizado el ${fechaDeInstante(p.fecha_fin)}</div>`;
+  if (p.estado === 'cancelado') {
+    plazo = `<div class="chico suave">${p.cancelacion && p.cancelacion.fecha ? `cancelado el ${fechaDeInstante(p.cancelacion.fecha)}` : 'cancelado'}</div>`;
+  }
+  const estimada = cerrado
+    ? '<span class="suave">—</span>'
+    : `${fecha(p.fecha_estimada)}${p.dias_corrimiento
+      ? `<div class="chico corrida">+${p.dias_corrimiento} ${p.dias_corrimiento === 1 ? 'día' : 'días'} por pausas</div>`
+      : '<div class="chico suave">sin demoras</div>'}`;
+  const reprogramar = cerrado
     ? ''
     : `<button class="boton secundario chico" type="button" data-reprogramar="${esc(p.id)}">Reprogramar</button>`;
   return `
@@ -25,8 +33,10 @@ function filaProyecto(p) {
       <td>${pastillaEstado(p)}</td>
       <td>${esc(p.etapa_actual || '—')}</td>
       <td class="num">${fecha(p.plazo_entrega)}${plazo}</td>
-      <td class="celda-acciones">
+      <td class="num">${estimada}</td>
+      <td class="celda-acciones apiladas">
         <a class="boton secundario chico" href="#historial/${encodeURIComponent(p.id)}">Historial</a>${reprogramar}
+        <a class="boton secundario chico" href="#cliente/${encodeURIComponent(p.id)}">Vista cliente</a>
       </td>
     </tr>`;
 }
@@ -68,16 +78,17 @@ function irAlProyecto(id) {
 
 async function actualizar() {
   const [proyectos, alertas] = await Promise.all([api.proyectos(), api.alertas()]);
-  const cuenta = { rojo: 0, amarillo: 0, verde: 0, fin: 0 };
+  const cuenta = { rojo: 0, amarillo: 0, verde: 0, fin: 0, cancelado: 0 };
   proyectos.forEach((p) => { cuenta[p.semaforo] += 1; });
   raiz.querySelector('#indicadores').innerHTML = `
     <div class="tarjeta indicador rojo"><b>${cuenta.rojo}</b><span>Vencidos o parados</span></div>
     <div class="tarjeta indicador amarillo"><b>${cuenta.amarillo}</b><span>Por vencer</span></div>
     <div class="tarjeta indicador verde"><b>${cuenta.verde}</b><span>A tiempo</span></div>
-    <div class="tarjeta indicador"><b>${cuenta.fin}</b><span>Finalizados</span></div>`;
+    <div class="tarjeta indicador"><b>${cuenta.fin}</b><span>Finalizados</span></div>
+    <div class="tarjeta indicador"><b>${cuenta.cancelado}</b><span>Cancelados</span></div>`;
   raiz.querySelector('#proyectos').innerHTML = proyectos.length
     ? proyectos.map(filaProyecto).join('')
-    : '<tr><td colspan="6" class="vacio">Todavía no hay proyectos. Cargá el primero desde "Alta de proyecto".</td></tr>';
+    : '<tr><td colspan="7" class="vacio">Todavía no hay proyectos. Cargá el primero desde "Alta de proyecto".</td></tr>';
   pintarAlertas(alertas);
 }
 
@@ -139,7 +150,7 @@ export default {
           <span class="nota">Rojo: plazo vencido o trabajo pausado · Amarillo: faltan ${ctx.catalogo.margen_alerta_dias} días o menos · Verde: a tiempo</span></div>
         <div class="tarjeta-cuerpo sin-margen"><div class="tabla-caja">
           <table>
-            <thead><tr><th>ID</th><th>Trabajo</th><th>Estado</th><th>Etapa</th><th>Plazo de entrega</th><th></th></tr></thead>
+            <thead><tr><th>ID</th><th>Trabajo</th><th>Estado</th><th>Etapa</th><th>Plazo de entrega</th><th title="Plazo de la empresa más el tiempo que el trabajo estuvo detenido">Entrega estimada</th><th></th></tr></thead>
             <tbody id="proyectos"></tbody>
           </table>
         </div></div>

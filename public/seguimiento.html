@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0f2236">
+  <title>Detalle del pedido · Lima Mecanizados</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d5fa8'/%3E%3Cpath d='M8 8v16M12 8v16M15 8v16M19 8v16M21.5 8v16M25 8v16' stroke='%23fff' stroke-width='1.6'/%3E%3C/svg%3E">
+  <style>
+    /* Página pública para el cliente: siempre clara y pensada para el celular. */
+    /* Mismos colores y fuentes que el sistema (tema claro de css/estilos.css). */
+    :root {
+      --barra: #0f2236; --barra-tenue: #7e93aa; --logo: #2f7fd6;
+      --fondo: #f3f5f8; --tarjeta: #fff; --borde: #dbe1e9; --texto: #15202d; --suave: #5a6878;
+      --gris: #c3ccd8; --gris-claro: #e6ebf1; --tenue: #8491a1;
+      --verde: #17794a; --verde-claro: #e2f4ea; --naranja: #a8660b; --mal: #c2372b;
+      --fuente: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+      --fuente-titulo: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+      --mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--fondo); color: var(--texto); }
+    body { font: 16px/1.4 var(--fuente); -webkit-text-size-adjust: 100%; }
+    svg { display: block; }
+
+    .barra { background: var(--barra); padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top));
+      box-shadow: 0 1px 2px rgba(16, 32, 52, .2); position: sticky; top: 0; z-index: 5; }
+    .barra-dentro { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 11px; }
+    .barra-logo { color: var(--logo); flex: none; }
+    .barra h1 { margin: 0; font: 600 18px/1.2 var(--fuente-titulo); color: #fff; }
+    .barra small { display: block; color: var(--barra-tenue); font-size: 12.5px; }
+
+    .pagina { max-width: 560px; margin: 0 auto; padding: 12px 12px 32px; }
+    .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px;
+      box-shadow: 0 1px 2px rgba(16, 32, 52, .06), 0 4px 14px rgba(16, 32, 52, .05); margin-bottom: 12px; }
+
+    /* Tarjeta 1: la pieza */
+    .pieza { display: flex; gap: 14px; align-items: center; padding: 16px; }
+    .pieza-foto { width: 64px; height: 64px; flex: none; border-radius: 8px; border: 1px solid var(--borde);
+      display: grid; place-items: center; color: #1d5fa8; background: #e4eef9; overflow: hidden; }
+    .pieza-datos { min-width: 0; }
+    .pieza-nombre { font-size: 16px; font-weight: 600; margin: 0 0 2px; overflow-wrap: anywhere; }
+    .pieza-empresa { font-size: 14px; color: var(--suave); margin: 0; }
+    .pieza-numero { font-size: 13px; color: var(--suave); margin: 4px 0 0; }
+    .pieza-numero b { font: 600 13px var(--mono); color: var(--texto); white-space: nowrap; }
+
+    /* Tarjeta 2: fecha + seguimiento */
+    .entrega { padding: 18px 16px 16px; border-bottom: 1px solid var(--gris-claro); }
+    .entrega-aviso { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--naranja); }
+    .entrega-etiqueta { margin: 0 0 2px; font-size: 14px; color: var(--suave); }
+    .entrega-fecha { margin: 0; font: 600 22px/1.25 var(--fuente-titulo); }
+    .entrega-fecha.lista { color: var(--verde); }
+    .entrega-detalle { margin: 6px 0 0; font-size: 14px; color: var(--suave); }
+
+    .seguimiento { list-style: none; margin: 0; padding: 18px 16px 6px; }
+    .paso { display: grid; grid-template-columns: 48px 1fr; column-gap: 14px; position: relative; padding-bottom: 22px; }
+    .paso:last-child { padding-bottom: 12px; }
+    /* Línea vertical que une cada ícono con el siguiente */
+    .paso:not(:last-child)::after { content: ""; position: absolute; left: 23px; top: 40px; bottom: 0; width: 2px; background: var(--gris-claro); }
+    .paso.linea-verde::after { background: var(--verde); }
+    .paso.actual:not(:last-child)::after { top: 52px; }
+
+    .icono { width: 36px; height: 36px; margin: 2px auto 0; border-radius: 50%; display: grid; place-items: center;
+      border: 2px solid var(--gris); color: var(--gris); background: #fff; position: relative; z-index: 1; }
+    .icono svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .hecha .icono { border-color: var(--verde); color: var(--verde); background: var(--verde-claro); }
+    .actual .icono { width: 48px; height: 48px; margin-top: 0; border: 0; background: var(--verde); color: #fff;
+      box-shadow: 0 0 0 5px var(--verde-claro); }
+    .actual .icono svg { width: 27px; height: 27px; stroke-width: 1.9; }
+
+    .paso-texto { padding-top: 8px; min-width: 0; }
+    .actual .paso-texto { padding-top: 4px; }
+    .paso-titulo { margin: 0; font-size: 15px; color: var(--texto); }
+    .pendiente .paso-titulo { color: var(--tenue); }
+    .actual .paso-titulo { font-size: 17px; font-weight: 700; }
+    .paso-frase { margin: 2px 0 0; font-size: 14px; color: var(--suave); }
+    .paso-fecha { margin: 1px 0 0; font-size: 13px; color: var(--suave); }
+
+    .cancelado { padding: 18px 16px; }
+    .cancelado h2 { margin: 0 0 4px; font-size: 20px; }
+    .cancelado p { margin: 0; color: var(--suave); font-size: 14.5px; }
+
+    .pie { text-align: center; color: var(--suave); font-size: 13px; margin: 18px 8px 0; }
+
+    .error { padding: 18px 16px; border-left: 4px solid var(--mal); }
+    .error h2 { margin: 0 0 6px; font-size: 18px; }
+    .error p { margin: 0; color: var(--suave); }
+    .cargando { padding: 24px 16px; color: var(--suave); text-align: center; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <div class="barra-dentro">
+      <svg class="barra-logo" viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M8 8.5v15M11.5 8.5v15M14.5 8.5v15M18.5 8.5v15M21 8.5v15M24.5 8.5v15" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg>
+      <div><h1>Detalle del pedido</h1><small>Lima Mecanizados SRL</small></div>
+    </div>
+  </header>
+  <main class="pagina" id="contenido">
+    <div class="tarjeta cargando">Cargando…</div>
+  </main>
+  <script type="module" src="js/seguimiento.js"></script>
+</body>
+</html>

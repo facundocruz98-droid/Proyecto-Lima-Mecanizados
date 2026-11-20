@@ -59,20 +59,21 @@ function resumenImportacion(nombreArchivo, r) {
     : '';
   return `
     <form method="dialog" id="formImportar">
-      <h2>Cargar proyectos desde Excel</h2>
+      <h2>Reemplazar la planilla con este Excel</h2>
       <p class="nota">${esc(nombreArchivo)} · hoja «${esc(r.hoja)}» · ${plural(r.filas, 'fila', 'filas')} con datos</p>
       <dl class="resumen importar-cifras">
-        <div><dt>Proyectos nuevos</dt><dd class="num">${r.nuevos}</dd></div>
+        <div><dt>Proyectos del Excel</dt><dd class="num">${r.nuevos}</dd></div>
+        <div><dt>Se borran</dt><dd class="num">${r.actuales}</dd></div>
         <div><dt>No se cargan</dt><dd class="num">${r.omitidos.length}</dd></div>
       </dl>
       ${estados ? `<ul class="importar-estados">${estados}</ul>` : ''}
       ${clientes}
       ${omitidos}
       <p class="nota importar-aviso">${r.nuevos
-        ? 'Se agregan a la planilla con su historial (pausas, causas y etapas). Los proyectos que ya están en el sistema no se modifican.'
-        : 'No hay proyectos nuevos para agregar.'}</p>
+        ? `<strong>Se borran los ${plural(r.actuales, 'proyecto', 'proyectos')} que hay ahora</strong> y la planilla queda igual al Excel, con su historial (pausas, causas, etapas y cancelaciones). Esta acción no se puede deshacer.`
+        : 'El Excel no tiene proyectos que se puedan cargar. La planilla actual no se modifica.'}</p>
       <div class="acciones-form">
-        ${r.nuevos ? `<button class="boton" type="submit" id="confirmarImportar"><span class="ico">${icono('subir')}</span>Agregar ${plural(r.nuevos, 'proyecto', 'proyectos')}</button>` : ''}
+        ${r.nuevos ? `<button class="boton" type="submit" id="confirmarImportar"><span class="ico">${icono('subir')}</span>Reemplazar por ${plural(r.nuevos, 'proyecto', 'proyectos')}</button>` : ''}
         <button class="boton secundario" type="button" data-cerrar>${r.nuevos ? 'Cancelar' : 'Cerrar'}</button>
       </div>
     </form>`;
@@ -94,7 +95,7 @@ async function importar(archivo) {
       try {
         const resultado = await api.importarPlanilla(contenido, usuario, true);
         ctx.cerrarDialogo();
-        avisar(`Listo: se ${resultado.nuevos === 1 ? 'agregó 1 proyecto' : `agregaron ${resultado.nuevos} proyectos`} a la planilla.`);
+        avisar(`Listo: la planilla ahora tiene ${plural(resultado.nuevos, 'proyecto', 'proyectos')} del Excel.`);
         await actualizar();
       } catch (error) {
         confirmar.disabled = false;
@@ -131,7 +132,7 @@ export default {
         <div class="tarjeta-cabeza">
           <span class="nota"><strong id="total" style="color:var(--texto)"></strong> · Las columnas en verde son las que agrega el sistema. Nadie carga "En Ejec" ni "Fecha Fin" a mano.</span>
           <div class="barra-acciones">
-            <label class="boton secundario boton-archivo" id="cargarExcel" title="Agregar proyectos desde un archivo .xlsx">
+            <label class="boton secundario boton-archivo" id="cargarExcel" title="Reemplazar la planilla con un archivo .xlsx">
               <span class="ico">${icono('subir')}</span>Cargar Excel
               <input type="file" id="archivoExcel" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
             </label>

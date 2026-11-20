@@ -45,9 +45,10 @@ La hoja de ruta se imprime desde Compras (tamaño A5) con código **Code 128**.
 | Panel | Gerencia / Supervisión | Semáforo de todos los trabajos, alertas y reprogramación de plazos (con motivo) |
 | Alta de proyecto | Gerencia | Carga los datos de la planilla; el sistema genera el ID |
 | Historial y causas | Gerencia / Supervisión | Línea de tiempo de cada trabajo, causas de demora y pausas por etapa |
-| Planilla | Gerencia | La planilla de siempre, con "En Ejec" y "Fecha Fin" completadas por el escaneo; se descarga para Excel |
+| Planilla | Gerencia | La planilla de siempre, con "En Ejec" y "Fecha Fin" completadas por el escaneo; se descarga para Excel. "Cargar Excel" **reemplaza** todos los proyectos por los del archivo (incluidos los cancelados) |
 | Recepción y hoja de ruta | Compras | Registra la llegada de materiales, emite e imprime la hoja de ruta, atiende alertas |
 | Puesto de taller | Operario | Escanea e inicia, pausa, continúa, finaliza y marca la etapa |
+| Seguimiento del cliente | Cliente | Vista previa de lo que ve el cliente y su link; la página pública es `seguimiento.html` |
 
 ## Reglas de negocio
 
@@ -62,7 +63,21 @@ La hoja de ruta se imprime desde Compras (tamaño A5) con código **Code 128**.
 7. Si la causa de la pausa es "Falta de material", se alerta a Compras y a Gerencia;
    la alerta se cierra cuando Compras registra la llegada.
 
-El margen de 2 días y la lista de etapas están en `src/reglas.js`.
+8. **Entrega estimada:** el sistema suma al plazo de entrega el tiempo que el trabajo estuvo pausado
+   (cada día o fracción de pausa corre la fecha un día, incluida la pausa en curso). El plazo cargado
+   por la empresa no se modifica. Si Gerencia reprograma el plazo, el conteo vuelve a empezar desde ahí.
+9. **Link del cliente:** cada proyecto tiene un link propio (pantalla "Seguimiento del cliente" o botón "Vista cliente" en el Panel).
+   La página tiene estilo "detalle del pedido" para el celular: la pieza, la fecha de entrega destacada y un seguimiento
+   con íconos (Pedido recibido → En fabricación → Listo para entregar → Entregado) que sale del estado del proyecto.
+   Si hay demora muestra la nueva fecha y la acordada. Al finalizar, la línea se completa hasta "Entregado"
+   (solo visual para la demo: no se registra ninguna entrega). Las operaciones del taller (Corte, Soldadura…),
+   las causas internas y los operarios no se muestran.
+   El link está firmado con una clave secreta, así que no se puede adivinar el de otro proyecto.
+
+10. **Proyectos cancelados:** quedan con estado "Cancelado", no generan alertas y el taller no puede trabajarlos.
+    Se cargan desde el Excel (columna de estado "Cancelado" o evento `cancelar` en el historial).
+
+El margen de 2 días, la lista de etapas y el cálculo de la entrega estimada están en `src/reglas.js`.
 
 ## Estructura del proyecto
 
@@ -91,7 +106,8 @@ datos/                   Base de datos (se crea sola)
 
 ## Base de datos
 
-SQLite, 5 tablas: `cliente`, `usuario`, `proyecto`, `material` y `evento`.
+SQLite, 6 tablas: `cliente`, `usuario`, `proyecto`, `material`, `evento` y `config`
+(guarda la clave con la que se firman los links de seguimiento).
 Cada acción queda guardada como un **evento** con fecha, hora, usuario, etapa, causa y detalle;
 de ahí salen el historial, las alertas y los indicadores.
 
@@ -107,6 +123,7 @@ de ahí salen el historial, las alertas y los indicadores.
 | POST | `/api/proyectos/:id/recepcion` | Recepción de materiales indispensables (Compras) |
 | POST | `/api/proyectos/:id/recepcion-parcial` | Material que llega después (Compras) |
 | POST | `/api/proyectos/:id/iniciar` · `pausar` · `continuar` · `finalizar` · `etapa` | Acciones del taller |
+| GET | `/api/seguimiento/:link` | Datos públicos de un proyecto para el cliente |
 | GET | `/api/alertas` | Vencidos, falta de material, material recibido y por vencer |
 | GET | `/api/indicadores` | Pausas y horas detenidas por causa y por etapa |
 | GET | `/api/planilla` · `/api/planilla.csv` | Planilla en JSON o CSV (con cantidad de pausas y tiempo detenido) |
@@ -121,7 +138,7 @@ de ahí salen el historial, las alertas y los indicadores.
 npm test
 ```
 
-Corre 24 pruebas automáticas: reglas de negocio, generador de código de barras y el ciclo completo
+Corre 32 pruebas automáticas: reglas de negocio, generador de código de barras y el ciclo completo
 de un proyecto contra el servidor real (con una base de datos temporal).
 
 ## Copia de seguridad
@@ -138,6 +155,8 @@ Para hacerla todas las noches se puede programar con el Programador de tareas de
 - **No hay inicio de sesión.** El rol se elige por pantalla; el servidor igual verifica que cada acción
   la haga el rol que corresponde (por ejemplo, solo Gerencia reprograma).
 - **Los datos son de ejemplo**, con clientes ficticios.
+- **El link del cliente funciona dentro de la red de la empresa.** Para que un cliente lo abra desde su casa,
+  el sistema tendría que estar publicado en internet (hosting o un servidor con dirección pública).
 - **No cubre** los trabajos in situ, el control de inventario ni las áreas de Presupuesto, Calidad,
   Expedición, Facturación y Cobro.
 - El significado de las urgencias (E = estándar, U = urgente) y el margen de la alerta preventiva

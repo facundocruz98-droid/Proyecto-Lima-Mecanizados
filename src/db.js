@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS proyecto (
   urgencia         TEXT NOT NULL CHECK (urgencia IN ('E', 'U')),
   aprobado         INTEGER NOT NULL DEFAULT 1,
   estado           TEXT NOT NULL DEFAULT 'pendiente_mat'
-                   CHECK (estado IN ('pendiente_mat', 'listo', 'en_proceso', 'pausado', 'finalizado')),
+                   CHECK (estado IN ('pendiente_mat', 'listo', 'en_proceso', 'pausado', 'finalizado', 'cancelado')),
   etapa_actual     TEXT NOT NULL DEFAULT ''
 );
 
@@ -50,12 +50,18 @@ CREATE TABLE IF NOT EXISTS evento (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   id_proyecto  TEXT NOT NULL REFERENCES proyecto(id) ON DELETE CASCADE,
   tipo         TEXT NOT NULL CHECK (tipo IN ('alta', 'recepcion', 'recepcion_parcial', 'inicio',
-                 'etapa', 'pausa', 'continuar', 'finalizar', 'reprogramar')),
+                 'etapa', 'pausa', 'continuar', 'finalizar', 'reprogramar', 'cancelar')),
   fecha_hora   TEXT NOT NULL,                      -- ISO 8601 (UTC)
   id_usuario   INTEGER NOT NULL REFERENCES usuario(id),
   etapa        TEXT,
   causa        TEXT,
   detalle      TEXT
+);
+
+-- Configuración interna (ej. la clave con la que se firman los links de seguimiento del cliente).
+CREATE TABLE IF NOT EXISTS config (
+  clave  TEXT PRIMARY KEY,
+  valor  TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_evento_proyecto  ON evento (id_proyecto, id);
@@ -71,7 +77,39 @@ function abrirBase(ruta) {
   const db = new DatabaseSync(ruta);
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(ESQUEMA);
+  migrarCancelados(db);
   return db;
+}
+
+/**
+ * Las bases creadas antes no aceptaban el estado "cancelado" ni el evento "cancelar".
+ * SQLite no permite cambiar esas reglas: se rehacen las dos tablas copiando todos los datos.
+ */
+function migrarCancelados(db) {
+  const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'evento'").get()?.sql || '';
+  if (sql.includes("'cancelar'")) return;
+  const definicion = (tabla) => {
+    const inicio = ESQUEMA.indexOf(`CREATE TABLE IF NOT EXISTS ${tabla} (`);
+    const fin = ESQUEMA.indexOf(');', inicio) + 2;
+    return ESQUEMA.slice(inicio, fin).replace(`IF NOT EXISTS ${tabla} (`, `${tabla}_nueva (`);
+  };
+  db.exec('PRAGMA foreign_keys = OFF;');
+  db.exec('BEGIN');
+  try {
+    for (const tabla of ['proyecto', 'evento']) {
+      db.exec(definicion(tabla));
+      db.exec(`INSERT INTO ${tabla}_nueva SELECT * FROM ${tabla}`);
+      db.exec(`DROP TABLE ${tabla}`);
+      db.exec(`ALTER TABLE ${tabla}_nueva RENAME TO ${tabla}`);
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_evento_proyecto ON evento (id_proyecto, id);');
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON;');
+  }
 }
 
 /** Ejecuta fn dentro de una transacción: si algo falla, no se guarda nada. */

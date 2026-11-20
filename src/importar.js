@@ -8,7 +8,7 @@
  *  - Si trae "HISTORIAL EVENTOS (JSON)", se cargan esos eventos tal cual ocurrieron.
  *  - Si no, se arma un historial mínimo a partir del estado (ESTADO OPERATIVO o Estado).
  *
- * Nunca pisa datos: los ID que ya están en el sistema se omiten.
+ * Los proyectos cancelados también se cargan (estado "Cancelado").
  */
 const reglas = require('./reglas');
 
@@ -47,11 +47,13 @@ const TRANSICIONES = {
   pausa: [['en_proceso'], 'pausado'],
   continuar: [['pausado'], 'en_proceso'],
   finalizar: [['en_proceso'], 'finalizado'],
+  cancelar: [['pendiente_mat', 'listo', 'en_proceso', 'pausado'], 'cancelado'],
 };
 const INFORMATIVOS = new Set(['recepcion_parcial', 'etapa', 'reprogramar']);
 const ROL_DEL_EVENTO = {
   alta: 'Gerencia', reprogramar: 'Gerencia', recepcion: 'Compras', recepcion_parcial: 'Compras',
   inicio: 'Operario', etapa: 'Operario', pausa: 'Operario', continuar: 'Operario', finalizar: 'Operario',
+  cancelar: 'Gerencia',
 };
 
 /** Celda de fecha → AAAA-MM-DD ('' si no es una fecha). Acepta fecha de Excel, 31/12/2026 o 2026-12-31. */
@@ -113,7 +115,6 @@ function eventosDelHistorial(crudo) {
   const eventos = [];
   for (const e of lista) {
     let tipo = textoCelda(e?.tipo).toLowerCase();
-    if (tipo === 'cancelar') return { cancelado: true };
     if (tipo === 'etapa_fin') continue;           // el sistema registra solo el cambio a la etapa nueva
     if (tipo === 'etapa_inicio') tipo = 'etapa';
     if (!TRANSICIONES[tipo] && !INFORMATIVOS.has(tipo)) continue;
@@ -161,6 +162,10 @@ function eventosDelEstado(estado, f, ahora) {
   if (estado === 'finalizado') {
     const fin = f.fin && f.fin >= dia ? f.fin : dia;
     eventos.push({ tipo: 'finalizar', instante: momento(fin, 17, ahora), etapa: f.etapa || null });
+  }
+  if (estado === 'cancelado') {
+    const fin = f.fin && f.fin >= dia ? f.fin : dia;
+    eventos.push({ tipo: 'cancelar', instante: momento(fin, 17, ahora), etapa: f.etapa || null, detalle: 'Cancelado (cargado desde Excel)' });
   }
   return eventos.map((e) => ({ etapa: null, causa: null, detalle: null, ...e, instante: Date.parse(e.instante) }));
 }
@@ -217,18 +222,16 @@ function analizarLibro(libro, { existentes, clientes, ahora }) {
     if (!f.nombre) { omitir('falta el nombre del proyecto'); continue; }
 
     const textoEstado = normalizar(celda('estado'));
-    if (textoEstado === 'CANCELADO') { omitir('está cancelado (el sistema no maneja proyectos cancelados)'); continue; }
 
     let historial;
     const json = textoCelda(celda('historial'));
     if (json) {
       historial = eventosDelHistorial(json);
-      if (historial.cancelado) { omitir('está cancelado (el sistema no maneja proyectos cancelados)'); continue; }
       if (historial.error) { omitir(historial.error); continue; }
     } else {
       const estado = textoEstado ? ESTADO_POR_TEXTO.get(textoEstado) : 'pendiente_mat';
       if (!estado) { omitir(`el estado "${textoCelda(celda('estado'))}" no existe en el sistema`); continue; }
-      historial = { eventos: eventosDelEstado(estado, f, ahora), estado, etapa: estado === 'pendiente_mat' || estado === 'listo' ? '' : (f.etapa || reglas.ETAPAS[0]) };
+      historial = { eventos: eventosDelEstado(estado, f, ahora), estado, etapa: estado === 'pendiente_mat' || estado === 'listo' ? '' : (f.etapa || (estado === 'cancelado' ? '' : reglas.ETAPAS[0])) };
     }
     if (historial.eventos.some((e) => e.instante > ahora.getTime())) { omitir('el historial tiene eventos con fecha futura'); continue; }
 

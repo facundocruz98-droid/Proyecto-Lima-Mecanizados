@@ -17,6 +17,7 @@ const TITULOS = {
   continuar: 'Trabajo continuado',
   finalizar: 'Trabajo finalizado',
   reprogramar: 'Plazo reprogramado',
+  cancelar: 'Proyecto cancelado',
 };
 
 function pintarProyecto(p) {
@@ -29,7 +30,10 @@ function pintarProyecto(p) {
     </div>
     <dl class="resumen">
       <div><dt>Plazo de entrega</dt><dd>${fecha(p.plazo_entrega)}</dd></div>
-      <div><dt>${p.estado === 'finalizado' ? 'Finalizado el' : 'Tiempo restante'}</dt><dd>${p.estado === 'finalizado' ? fechaDeInstante(p.fecha_fin) : textoPlazo(p.dias_restantes)}</dd></div>
+      ${p.estado === 'finalizado' || p.estado === 'cancelado' ? '' : `<div><dt>Entrega estimada</dt><dd>${fecha(p.fecha_estimada)}${p.dias_corrimiento ? ` <span class="chico corrida">(+${p.dias_corrimiento} ${p.dias_corrimiento === 1 ? 'día' : 'días'} por pausas)</span>` : ''}</dd></div>`}
+      <div><dt>${{ finalizado: 'Finalizado el', cancelado: 'Cancelado el' }[p.estado] || 'Tiempo restante'}</dt><dd>${p.estado === 'finalizado' ? fechaDeInstante(p.fecha_fin)
+        : p.estado === 'cancelado' ? (p.cancelacion && p.cancelacion.fecha ? fechaDeInstante(p.cancelacion.fecha) : '—')
+          : textoPlazo(p.dias_restantes)}</dd></div>
       <div><dt>Etapa actual</dt><dd>${esc(p.etapa_actual || '—')}</dd></div>
       <div><dt>Tiempo en proceso</dt><dd>${duracion(p.tiempos.horas_en_proceso)}</dd></div>
       <div><dt>Tiempo detenido</dt><dd>${duracion(p.tiempos.horas_en_pausa)}</dd></div>

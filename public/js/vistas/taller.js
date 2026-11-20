@@ -22,7 +22,7 @@ function enfocarEscaner() {
 
 function pintarFichas(proyectos) {
   el('fichas').innerHTML = proyectos
-    .filter((p) => p.estado !== 'finalizado')
+    .filter((p) => p.estado !== 'finalizado' && p.estado !== 'cancelado')
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((p) => `<button class="ficha" type="button" data-ficha="${esc(p.id)}">${esc(p.id)}</button>`).join('');
 }
@@ -40,6 +40,8 @@ function pintarTrabajo() {
       Compras tiene que registrar la recepción y emitir la hoja de ruta.</p></div>`;
   } else if (p.estado === 'finalizado') {
     cuerpo = '<p class="exito">Este trabajo ya está finalizado.</p>';
+  } else if (p.estado === 'cancelado') {
+    cuerpo = '<div class="bloqueo"><h3>Proyecto cancelado</h3><p>Este proyecto fue cancelado: no hay que trabajar en él.</p></div>';
   } else if (pausando) {
     cuerpo = `
       <form class="bloqueo" id="formPausa" novalidate autocomplete="off">
@@ -84,7 +86,7 @@ function pintarTrabajo() {
       </div>
       <div class="trabajo-datos">
         <span>${esc(p.cliente)}</span>
-        <span>Entrega <b>${fecha(p.plazo_entrega)}</b>${p.estado === 'finalizado' ? '' : ` · ${textoPlazo(p.dias_restantes)}`}</span>
+        <span>Entrega <b>${fecha(p.plazo_entrega)}</b>${p.estado === 'finalizado' || p.estado === 'cancelado' ? '' : ` · ${textoPlazo(p.dias_restantes)}`}</span>
         ${p.etapa_actual ? `<span>Etapa <b>${esc(p.etapa_actual)}</b></span>` : ''}
         ${p.descripcion ? `<span>${esc(p.descripcion)}</span>` : ''}
       </div>

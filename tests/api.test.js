@@ -247,8 +247,13 @@ test('dashboard: los mismos proyectos de la planilla, con su historial de evento
   assert.match(datos.hoy, /^\d{4}-\d{2}-\d{2}$/);
 });
 
-test('cargar Excel: vista previa, confirmación y sin duplicar', async () => {
+test('cargar Excel: reemplaza la planilla e incluye los cancelados', async () => {
   const { crearLibro, fechaExcel } = require('../src/excel');
+  const historialCancelado = JSON.stringify([
+    { tipo: 'alta', fecha_hora: '2026-10-01T12:00:00Z' },
+    { tipo: 'recepcion', fecha_hora: '2026-10-02T12:00:00Z' },
+    { tipo: 'cancelar', fecha_hora: '2026-10-06T12:00:00Z', detalle: 'El cliente desistió' },
+  ]);
   const historial = JSON.stringify([
     { tipo: 'alta', fecha_hora: '2026-10-01T12:00:00Z' },
     { tipo: 'recepcion', fecha_hora: '2026-10-02T12:00:00Z' },
@@ -265,7 +270,9 @@ test('cargar Excel: vista previa, confirmación y sin duplicar', async () => {
       ['0900-XLS-E-01', fechaExcel('2026-10-01'), fechaExcel('2026-12-01'), 'Cliente Excel', 'Con historial', 'Pausado', '', historial],
       ['0901-XLS-U-01', '02/10/2026', '2026-12-05', 'Cliente Excel', 'Solo estado', 'Finalizado', '20/10/2026', ''],
       ['0902-XLS-E-01', '03/10/2026', '06/12/2026', 'Cliente Excel', 'Cancelado', 'Cancelado', '', ''],
-      ['0640-IVA-E-01', '03/10/2026', '06/12/2026', 'Ingenio', 'Ya existe', 'Listo para iniciar', '', ''],
+      ['0903-XLS-E-01', '01/10/2026', '06/12/2026', 'Cliente Excel', 'Cancelado con historial', 'Cancelado', '', historialCancelado],
+      ['0904-XLS-E-01', '03/10/2026', '06/12/2026', 'Cliente Excel', 'Repetido', 'Listo para iniciar', '', ''],
+      ['0904-XLS-E-01', '03/10/2026', '06/12/2026', 'Cliente Excel', 'Repetido', 'Listo para iniciar', '', ''],
       ['MAL-ID', '03/10/2026', '06/12/2026', 'Cliente', 'ID inválido', '', '', ''],
     ],
   }]);
@@ -279,9 +286,11 @@ test('cargar Excel: vista previa, confirmación y sin duplicar', async () => {
   const previa = await subir(GERENCIA, false);
   assert.equal(previa.estado, 200);
   assert.equal(previa.datos.guardado, false);
-  assert.equal(previa.datos.nuevos, 2);
-  assert.deepEqual(previa.datos.omitidos.map((o) => o.id), ['0902-XLS-E-01', '0640-IVA-E-01', 'MAL-ID']);
+  assert.equal(previa.datos.nuevos, 5);
+  assert.ok(previa.datos.actuales > 0);
+  assert.deepEqual(previa.datos.omitidos.map((o) => o.id), ['0904-XLS-E-01', 'MAL-ID']);
   assert.equal((await pedir('GET', '/api/proyectos/0900-XLS-E-01')).estado, 404, 'la vista previa no guarda');
+  assert.equal((await pedir('GET', '/api/proyectos/0640-IVA-E-01')).estado, 200, 'la vista previa no borra');
 
   const guardado = await subir(GERENCIA, true);
   assert.equal(guardado.datos.guardado, true);
@@ -294,11 +303,31 @@ test('cargar Excel: vista previa, confirmación y sin duplicar', async () => {
   assert.equal(finalizado.estado, 'finalizado');
   assert.equal(finalizado.urgencia, 'U');
 
+  // La planilla queda igual al Excel: los proyectos anteriores ya no están.
+  const lista = (await pedir('GET', '/api/proyectos')).datos;
+  assert.deepEqual(lista.map((p) => p.id).sort(), ['0900-XLS-E-01', '0901-XLS-U-01', '0902-XLS-E-01', '0903-XLS-E-01', '0904-XLS-E-01']);
+  assert.equal((await pedir('GET', '/api/proyectos/0640-IVA-E-01')).estado, 404);
+
+  const cancelado = (await pedir('GET', '/api/proyectos/0903-XLS-E-01')).datos;
+  assert.equal(cancelado.estado, 'cancelado');
+  assert.equal(cancelado.cancelacion.motivo, 'El cliente desistió');
+  assert.equal(cancelado.semaforo, 'cancelado');
+  assert.equal((await pedir('GET', '/api/proyectos/0902-XLS-E-01')).datos.estado, 'cancelado');
+  const alertas = (await pedir('GET', '/api/alertas')).datos;
+  assert.ok(!alertas.vencidos.some((p) => p.id.startsWith('0902') || p.id.startsWith('0903')));
+  assert.equal((await pedir('POST', '/api/proyectos/0903-XLS-E-01/reprogramar',
+    { id_usuario: GERENCIA, plazo_entrega: '2026-12-20', motivo: 'Probar cancelado' })).estado, 400);
+
+  // Cargar el mismo Excel otra vez no duplica: vuelve a reemplazar.
   const otraVez = await subir(GERENCIA, true);
-  assert.equal(otraVez.datos.nuevos, 0, 'lo que ya se cargó no se duplica');
+  assert.equal(otraVez.datos.actuales, 5);
+  assert.equal((await pedir('GET', '/api/proyectos')).datos.length, 5);
 
   const basura = await fetch(`${base}/api/planilla/importar`, { method: 'POST', body: 'esto no es un excel', headers: { 'X-Usuario': String(GERENCIA) } });
   assert.equal(basura.status, 400);
+  assert.equal((await pedir('GET', '/api/proyectos')).datos.length, 5, 'un archivo inválido no borra nada');
+
+  await pedir('POST', '/api/demo/restablecer'); // las pruebas siguientes usan los datos de ejemplo
 });
 
 test('planilla CSV: lista para Excel', async () => {
