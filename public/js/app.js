@@ -10,8 +10,9 @@ import compras from './vistas/compras.js';
 import taller from './vistas/taller.js';
 import historial from './vistas/historial.js';
 import planilla from './vistas/planilla.js';
+import dashboard from './vistas/dashboard.js';
 
-const VISTAS = { panel, alta, compras, taller, historial, planilla };
+const VISTAS = { panel, dashboard, alta, compras, taller, historial, planilla };
 const $ = (selector) => document.querySelector(selector);
 
 let catalogo = null;

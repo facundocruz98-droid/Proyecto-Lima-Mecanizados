@@ -233,6 +233,74 @@ test('indicadores: cuentan las pausas por causa y por etapa', async () => {
   assert.equal(datos.etapas.find((e) => e.etapa === 'Soldadura').pausas, 2);
 });
 
+test('dashboard: los mismos proyectos de la planilla, con su historial de eventos', async () => {
+  const { estado, datos } = await pedir('GET', '/api/dashboard');
+  assert.equal(estado, 200);
+  const planilla = (await pedir('GET', '/api/planilla')).datos;
+  assert.deepEqual(datos.proyectos.map((p) => p.id), planilla.map((p) => p.id));
+  for (const p of datos.proyectos) {
+    assert.ok(p.eventos.length >= 1, `${p.id} tiene historial`);
+    assert.equal(p.eventos[0].tipo, 'alta');
+    assert.match(p.eventos[0].fecha_hora, /Z$/);
+    assert.equal(p.estado, planilla.find((f) => f.id === p.id).estado);
+  }
+  assert.match(datos.hoy, /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test('cargar Excel: vista previa, confirmación y sin duplicar', async () => {
+  const { crearLibro, fechaExcel } = require('../src/excel');
+  const historial = JSON.stringify([
+    { tipo: 'alta', fecha_hora: '2026-10-01T12:00:00Z' },
+    { tipo: 'recepcion', fecha_hora: '2026-10-02T12:00:00Z' },
+    { tipo: 'inicio', fecha_hora: '2026-10-03T12:00:00Z', etapa: 'Corte' },
+    { tipo: 'etapa_fin', fecha_hora: '2026-10-04T12:00:00Z', etapa: 'Corte' },
+    { tipo: 'etapa_inicio', fecha_hora: '2026-10-04T12:05:00Z', etapa: 'Soldadura' },
+    { tipo: 'pausa', fecha_hora: '2026-10-05T12:00:00Z', causa: 'Falta de material', detalle: 'Sin electrodos', etapa: 'Soldadura' },
+  ]);
+  const libro = crearLibro([{
+    nombre: 'Proyectos',
+    columnas: ['ID', 'FECHA IN', 'PLAZO ENTREGA', 'CLIENTE', 'NOMBRE PROY', 'ESTADO OPERATIVO', 'Fecha Fin', 'HISTORIAL EVENTOS (JSON)']
+      .map((titulo) => ({ titulo, ancho: 10 })),
+    filas: [
+      ['0900-XLS-E-01', fechaExcel('2026-10-01'), fechaExcel('2026-12-01'), 'Cliente Excel', 'Con historial', 'Pausado', '', historial],
+      ['0901-XLS-U-01', '02/10/2026', '2026-12-05', 'Cliente Excel', 'Solo estado', 'Finalizado', '20/10/2026', ''],
+      ['0902-XLS-E-01', '03/10/2026', '06/12/2026', 'Cliente Excel', 'Cancelado', 'Cancelado', '', ''],
+      ['0640-IVA-E-01', '03/10/2026', '06/12/2026', 'Ingenio', 'Ya existe', 'Listo para iniciar', '', ''],
+      ['MAL-ID', '03/10/2026', '06/12/2026', 'Cliente', 'ID inválido', '', '', ''],
+    ],
+  }]);
+  const subir = (usuario, confirmar) => fetch(`${base}/api/planilla/importar`, {
+    method: 'POST', body: libro,
+    headers: { 'Content-Type': 'application/octet-stream', 'X-Usuario': String(usuario), ...(confirmar ? { 'X-Confirmar': 'si' } : {}) },
+  }).then(async (r) => ({ estado: r.status, datos: await r.json() }));
+
+  assert.equal((await subir(COMPRAS, false)).estado, 403);
+
+  const previa = await subir(GERENCIA, false);
+  assert.equal(previa.estado, 200);
+  assert.equal(previa.datos.guardado, false);
+  assert.equal(previa.datos.nuevos, 2);
+  assert.deepEqual(previa.datos.omitidos.map((o) => o.id), ['0902-XLS-E-01', '0640-IVA-E-01', 'MAL-ID']);
+  assert.equal((await pedir('GET', '/api/proyectos/0900-XLS-E-01')).estado, 404, 'la vista previa no guarda');
+
+  const guardado = await subir(GERENCIA, true);
+  assert.equal(guardado.datos.guardado, true);
+  const pausado = (await pedir('GET', '/api/proyectos/0900-XLS-E-01')).datos;
+  assert.equal(pausado.estado, 'pausado');
+  assert.equal(pausado.etapa_actual, 'Soldadura');
+  assert.equal(pausado.pausa_actual.causa, 'Falta de material');
+  assert.deepEqual(pausado.eventos.map((e) => e.tipo), ['alta', 'recepcion', 'inicio', 'etapa', 'pausa']);
+  const finalizado = (await pedir('GET', '/api/proyectos/0901-XLS-U-01')).datos;
+  assert.equal(finalizado.estado, 'finalizado');
+  assert.equal(finalizado.urgencia, 'U');
+
+  const otraVez = await subir(GERENCIA, true);
+  assert.equal(otraVez.datos.nuevos, 0, 'lo que ya se cargó no se duplica');
+
+  const basura = await fetch(`${base}/api/planilla/importar`, { method: 'POST', body: 'esto no es un excel', headers: { 'X-Usuario': String(GERENCIA) } });
+  assert.equal(basura.status, 400);
+});
+
 test('planilla CSV: lista para Excel', async () => {
   const { estado, datos, cabeceras } = await pedir('GET', '/api/planilla.csv');
   assert.equal(estado, 200);

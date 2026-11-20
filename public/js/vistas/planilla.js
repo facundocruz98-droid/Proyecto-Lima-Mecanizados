@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { avisar, duracion, esc, fecha, icono } from '../util.js';
 
 let raiz;
+let ctx;
 let filas = [];
 
 const el = (id) => raiz.querySelector(`#${id}`);
@@ -40,6 +41,74 @@ async function actualizar() {
   el('total').textContent = filas.length === 1 ? '1 proyecto' : `${filas.length} proyectos`;
 }
 
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+
+function resumenImportacion(nombreArchivo, r) {
+  const estados = Object.entries(r.por_estado)
+    .map(([estado, n]) => `<li><span>${esc(estado)}</span><b class="num">${n}</b></li>`).join('');
+  const omitidos = r.omitidos.length ? `
+    <details class="importar-omitidos"${r.nuevos ? '' : ' open'}>
+      <summary>${plural(r.omitidos.length, 'fila no se carga', 'filas no se cargan')} · ver por qué</summary>
+      <div class="tabla-caja"><table>
+        <thead><tr><th>Fila</th><th>ID</th><th>Motivo</th></tr></thead>
+        <tbody>${r.omitidos.map((o) => `<tr><td class="num">${o.fila}</td><td class="codigo">${esc(o.id)}</td><td>${esc(o.motivo)}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </details>` : '';
+  const clientes = r.clientes_nuevos.length
+    ? `<p class="nota">Se crean ${plural(r.clientes_nuevos.length, 'cliente nuevo', 'clientes nuevos')}: ${r.clientes_nuevos.slice(0, 4).map((c) => `${esc(c.nombre)} (${esc(c.codigo)})`).join(', ')}${r.clientes_nuevos.length > 4 ? ` y ${r.clientes_nuevos.length - 4} más` : ''}.</p>`
+    : '';
+  return `
+    <form method="dialog" id="formImportar">
+      <h2>Cargar proyectos desde Excel</h2>
+      <p class="nota">${esc(nombreArchivo)} · hoja «${esc(r.hoja)}» · ${plural(r.filas, 'fila', 'filas')} con datos</p>
+      <dl class="resumen importar-cifras">
+        <div><dt>Proyectos nuevos</dt><dd class="num">${r.nuevos}</dd></div>
+        <div><dt>No se cargan</dt><dd class="num">${r.omitidos.length}</dd></div>
+      </dl>
+      ${estados ? `<ul class="importar-estados">${estados}</ul>` : ''}
+      ${clientes}
+      ${omitidos}
+      <p class="nota importar-aviso">${r.nuevos
+        ? 'Se agregan a la planilla con su historial (pausas, causas y etapas). Los proyectos que ya están en el sistema no se modifican.'
+        : 'No hay proyectos nuevos para agregar.'}</p>
+      <div class="acciones-form">
+        ${r.nuevos ? `<button class="boton" type="submit" id="confirmarImportar"><span class="ico">${icono('subir')}</span>Agregar ${plural(r.nuevos, 'proyecto', 'proyectos')}</button>` : ''}
+        <button class="boton secundario" type="button" data-cerrar>${r.nuevos ? 'Cancelar' : 'Cerrar'}</button>
+      </div>
+    </form>`;
+}
+
+async function importar(archivo) {
+  const boton = el('cargarExcel');
+  boton.classList.add('ocupado');
+  const usuario = ctx.usuarioConRol('Gerencia');
+  try {
+    const contenido = await archivo.arrayBuffer();
+    const previa = await api.importarPlanilla(contenido, usuario);
+    const dialogo = ctx.abrirDialogo(resumenImportacion(archivo.name, previa));
+    dialogo.querySelector('#formImportar').addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      const confirmar = dialogo.querySelector('#confirmarImportar');
+      confirmar.disabled = true;
+      confirmar.lastChild.textContent = 'Guardando…';
+      try {
+        const resultado = await api.importarPlanilla(contenido, usuario, true);
+        ctx.cerrarDialogo();
+        avisar(`Listo: se ${resultado.nuevos === 1 ? 'agregó 1 proyecto' : `agregaron ${resultado.nuevos} proyectos`} a la planilla.`);
+        await actualizar();
+      } catch (error) {
+        confirmar.disabled = false;
+        confirmar.lastChild.textContent = 'Reintentar';
+        avisar(error.message, 'mal');
+      }
+    });
+  } catch (error) {
+    avisar(error.message, 'mal');
+  } finally {
+    boton.classList.remove('ocupado');
+  }
+}
+
 async function copiar() {
   const texto = [['#', ...COLUMNAS.map(([titulo]) => titulo)], ...filas.map((f, n) => [n + 1, ...COLUMNAS.map(([, valor]) => String(valor(f)).replace(/[\t\r\n]+/g, ' '))])]
     .map((linea) => linea.join('\t')).join('\n');
@@ -53,14 +122,19 @@ async function copiar() {
 
 export default {
   titulo: 'Planilla',
-  subtitulo: 'La planilla de siempre, con "En Ejec" y "Fecha Fin" completadas por el escaneo del taller.',
-  async montar(elemento) {
+  subtitulo: 'La planilla de siempre, con "En Ejec" y "Fecha Fin" completadas por el escaneo del taller. También podés cargar proyectos desde un Excel.',
+  async montar(elemento, contexto) {
     raiz = elemento;
+    ctx = contexto;
     raiz.innerHTML = `
       <section class="tarjeta">
         <div class="tarjeta-cabeza">
           <span class="nota"><strong id="total" style="color:var(--texto)"></strong> · Las columnas en verde son las que agrega el sistema. Nadie carga "En Ejec" ni "Fecha Fin" a mano.</span>
           <div class="barra-acciones">
+            <label class="boton secundario boton-archivo" id="cargarExcel" title="Agregar proyectos desde un archivo .xlsx">
+              <span class="ico">${icono('subir')}</span>Cargar Excel
+              <input type="file" id="archivoExcel" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </label>
             <a class="boton" href="/api/planilla.xlsx" download="planilla-lima-mecanizados.xlsx"><span class="ico">${icono('descargar')}</span>Descargar para Excel</a>
             <button class="boton secundario" type="button" id="copiar"><span class="ico">${icono('copiar')}</span>Copiar</button>
           </div>
@@ -73,6 +147,11 @@ export default {
         </div></div>
       </section>`;
     el('copiar').addEventListener('click', copiar);
+    el('archivoExcel').addEventListener('change', (evento) => {
+      const archivo = evento.target.files[0];
+      evento.target.value = '';
+      if (archivo) importar(archivo);
+    });
     await actualizar();
   },
   actualizar,

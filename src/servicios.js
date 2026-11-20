@@ -6,6 +6,8 @@
 const { transaccion } = require('./db');
 const reglas = require('./reglas');
 const { cargarDatosDeEjemplo } = require('./datos-ejemplo');
+const { leerLibro, ErrorArchivo } = require('./leer-excel');
+const { analizarLibro } = require('./importar');
 
 /** Error esperado (dato inválido o regla incumplida). Se muestra tal cual al usuario. */
 class ErrorNegocio extends Error {
@@ -322,7 +324,90 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       .sort((a, b) => a.id_proyecto.localeCompare(b.id_proyecto) || a.id_evento - b.id_evento);
   }
 
+  /**
+   * Datos del Dashboard: cada proyecto de la planilla con su historial completo de eventos
+   * (alta, recepción, inicio, pausas, finalización…), que es de donde salen los gráficos.
+   */
+  function datosDashboard() {
+    const eventos = new Map();
+    for (const e of q.todosLosEventos.all()) {
+      if (!eventos.has(e.id_proyecto)) eventos.set(e.id_proyecto, []);
+      eventos.get(e.id_proyecto).push({
+        tipo: e.tipo, fecha_hora: e.fecha_hora, etapa: e.etapa, causa: e.causa, detalle: e.detalle,
+      });
+    }
+    return {
+      hoy: hoy(),
+      proyectos: q.proyectos.all().map(vista).sort((a, b) => a.id.localeCompare(b.id)).map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        cliente: p.cliente,
+        urgencia: p.urgencia,
+        aprobado: p.aprobado,
+        estado: p.estado_texto,
+        etapa: p.etapa_actual,
+        fecha_ingreso: p.fecha_ingreso,
+        plazo_entrega: p.plazo_entrega,
+        fecha_fin: p.fecha_fin ? reglas.fechaLocal(new Date(p.fecha_fin)) : '',
+        eventos: eventos.get(p.id) ?? [],
+      })),
+    };
+  }
+
   // ---------- Acciones de Gerencia ----------
+  /**
+   * Carga proyectos desde un Excel. Primero se llama sin confirmar (vista previa: no guarda nada)
+   * y después con confirmar = true. Los ID que ya existen nunca se pisan.
+   */
+  function importarPlanilla(archivo, { id_usuario: idUsuario, confirmar = false } = {}) {
+    exigirRol(idUsuario, ['Gerencia'], 'cargar proyectos desde Excel');
+    let libro;
+    try {
+      libro = leerLibro(archivo);
+    } catch (error) {
+      if (error instanceof ErrorArchivo) throw new ErrorNegocio(error.message);
+      throw new ErrorNegocio('No se pudo leer el archivo. Verificá que sea un Excel (.xlsx).');
+    }
+    const clientes = new Map(q.clientes.all().map((c) => [c.codigo, c.nombre]));
+    const analisis = analizarLibro(libro, {
+      existentes: new Set(q.proyectos.all().map((p) => p.id)), clientes, ahora: ahora(),
+    });
+    if (analisis.error) throw new ErrorNegocio(analisis.error);
+
+    const resumen = {
+      hoja: analisis.hoja,
+      filas: analisis.filas,
+      nuevos: analisis.nuevos.length,
+      por_estado: analisis.por_estado,
+      clientes_nuevos: analisis.clientes_nuevos,
+      omitidos: analisis.omitidos,
+      ejemplos: analisis.nuevos.slice(0, 5).map((p) => ({ id: p.id, nombre: p.nombre, estado: reglas.ESTADOS[p.estado] })),
+      guardado: false,
+    };
+    if (!confirmar || !analisis.nuevos.length) return resumen;
+
+    const usuarios = q.usuarios.all();
+    const usuarioDe = (rol) => (usuarios.find((u) => u.rol === rol) || usuarios.find((u) => u.rol === 'Supervisor') || usuarios[0]).id;
+    transaccion(db, () => {
+      for (const c of analisis.clientes_nuevos) q.insertarCliente.run(c.nombre, c.codigo);
+      const idCliente = new Map(q.clientes.all().map((c) => [c.codigo, c.id]));
+      const insertarProyecto = db.prepare(`INSERT INTO proyecto
+        (id, numero, item, fecha_ingreso, plazo_entrega, id_cliente, nombre, descripcion,
+         nro_presupuesto, urgencia, aprobado, estado, etapa_actual) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      for (const p of analisis.nuevos) {
+        insertarProyecto.run(p.id, p.numero, p.item, p.fecha_ingreso, p.plazo_entrega, idCliente.get(p.codigo_cliente), p.nombre,
+            p.descripcion, p.nro_presupuesto, p.urgencia, p.aprobado ? 1 : 0, p.estado, p.etapa_actual);
+        const recepcion = p.eventos.find((e) => e.tipo === 'recepcion');
+        q.insertarMaterial.run(p.id, 'Materiales indispensables (cargado desde Excel)', 1,
+          recepcion ? 1 : 0, recepcion ? recepcion.fecha_hora : null);
+        for (const e of p.eventos) {
+          q.insertarEvento.run(p.id, e.tipo, e.fecha_hora, usuarioDe(e.rol), e.etapa, e.causa, e.detalle);
+        }
+      }
+    });
+    return { ...resumen, guardado: true };
+  }
+
   function crearProyecto(datos = {}) {
     const usuario = exigirRol(datos.id_usuario, ['Gerencia'], 'dar de alta un proyecto');
     const cliente = texto(datos.cliente);
@@ -526,8 +611,8 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
   }
 
   return {
-    catalogo, listarProyectos, obtenerProyecto, alertas, indicadores, planilla, historialPausas,
-    crearProyecto, reprogramar, registrarRecepcion, registrarRecepcionParcial,
+    catalogo, listarProyectos, obtenerProyecto, alertas, indicadores, planilla, historialPausas, datosDashboard,
+    crearProyecto, importarPlanilla, reprogramar, registrarRecepcion, registrarRecepcionParcial,
     iniciar, pausar, continuar, finalizar, cambiarEtapa,
     restablecerDemo, inicializarSiEstaVacia,
   };

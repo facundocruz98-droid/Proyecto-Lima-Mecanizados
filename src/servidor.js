@@ -21,6 +21,7 @@ const TIPOS = {
   '.json': 'application/json; charset=utf-8',
 };
 const LIMITE_CUERPO = 100 * 1024;
+const LIMITE_EXCEL = 15 * 1024 * 1024;
 
 function responderJSON(res, estado, datos) {
   const cuerpo = JSON.stringify(datos);
@@ -30,6 +31,25 @@ function responderJSON(res, estado, datos) {
     'Cache-Control': 'no-store',
   });
   res.end(cuerpo);
+}
+
+/** Lee el cuerpo tal cual llega (archivos). */
+function leerArchivo(req, limite) {
+  return new Promise((resolver, rechazar) => {
+    let total = 0;
+    const partes = [];
+    req.on('data', (parte) => {
+      total += parte.length;
+      if (total > limite) {
+        rechazar(new ErrorNegocio('El archivo es demasiado grande (máximo 15 MB).', 413));
+        req.destroy();
+        return;
+      }
+      partes.push(parte);
+    });
+    req.on('end', () => resolver(Buffer.concat(partes)));
+    req.on('error', rechazar);
+  });
 }
 
 function leerCuerpo(req) {
@@ -189,6 +209,7 @@ function crearServidor({ rutaBase, ahora } = {}) {
       if (ruta === '/api/indicadores') return responderJSON(res, 200, servicios.indicadores());
       if (ruta === '/api/planilla') return responderJSON(res, 200, servicios.planilla());
       if (ruta === '/api/pausas') return responderJSON(res, 200, servicios.historialPausas());
+      if (ruta === '/api/dashboard') return responderJSON(res, 200, servicios.datosDashboard());
       if (ruta === '/api/planilla.xlsx') {
         const libro = planillaExcel(servicios.planilla(), servicios.historialPausas());
         res.writeHead(200, {
@@ -228,6 +249,14 @@ function crearServidor({ rutaBase, ahora } = {}) {
         const creado = servicios.crearProyecto(await leerCuerpo(req));
         avisarCambio();
         return responderJSON(res, 201, creado);
+      }
+      if (ruta === '/api/planilla/importar') {
+        const confirmar = req.headers['x-confirmar'] === 'si';
+        const resultado = servicios.importarPlanilla(await leerArchivo(req, LIMITE_EXCEL), {
+          id_usuario: Number(req.headers['x-usuario']) || 0, confirmar,
+        });
+        if (resultado.guardado) avisarCambio();
+        return responderJSON(res, 200, resultado);
       }
       if (ruta === '/api/demo/restablecer') {
         servicios.restablecerDemo();

@@ -30,6 +30,7 @@ export const api = {
   alertas: () => pedir('GET', '/api/alertas'),
   indicadores: () => pedir('GET', '/api/indicadores'),
   planilla: () => pedir('GET', '/api/planilla'),
+  dashboard: () => pedir('GET', '/api/dashboard'),
 
   crearProyecto: (datos) => pedir('POST', '/api/proyectos', datos),
   reprogramar: (id, datos) => pedir('POST', ruta(id, 'reprogramar'), datos),
@@ -42,4 +43,27 @@ export const api = {
   cambiarEtapa: (id, datos) => pedir('POST', ruta(id, 'etapa'), datos),
 
   restablecerDemo: () => pedir('POST', '/api/demo/restablecer'),
+
+  /** Envía un Excel para cargar proyectos. Sin confirmar solo devuelve la vista previa. */
+  async importarPlanilla(archivo, idUsuario, confirmar = false) {
+    let respuesta;
+    try {
+      respuesta = await fetch('/api/planilla/importar', {
+        method: 'POST',
+        body: archivo,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-Usuario': String(idUsuario),
+          ...(confirmar ? { 'X-Confirmar': 'si' } : {}),
+        },
+      });
+    } catch {
+      throw new Error('No se pudo conectar con el servidor. Verificá que el sistema esté iniciado.');
+    }
+    let datos = null;
+    try { datos = await respuesta.json(); } catch { /* sin cuerpo JSON */ }
+    if (respuesta.status === 404) throw new Error('El servidor está desactualizado: cerrá el sistema y abrilo de nuevo con INICIAR.bat.');
+    if (!respuesta.ok) throw new Error((datos && datos.error) || `El servidor respondió con un error (${respuesta.status}).`);
+    return datos;
+  },
 };

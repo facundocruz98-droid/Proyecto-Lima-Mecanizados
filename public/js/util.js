@@ -50,6 +50,8 @@ export function duracion(horas) {
 
 const TRAZOS = {
   panel: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  grafico: '<path d="M4 4v16h16"/><path d="M8 15l3.5-4 3 2.5L19 8"/>',
+  subir: '<path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 20h14"/>',
   mas: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
   reloj: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   tabla: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/>',
