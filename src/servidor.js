@@ -196,7 +196,6 @@ function crearServidor({ rutaBase, ahora } = {}) {
     pausar: servicios.pausar,
     continuar: servicios.continuar,
     finalizar: servicios.finalizar,
-    'agregar-pieza': servicios.agregarPieza,
     'completar-etapa': servicios.completarEtapa,
     'iniciar-etapa': servicios.iniciarEtapa,
     reprogramar: servicios.reprogramar,

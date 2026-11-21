@@ -33,7 +33,6 @@ export const api = {
   dashboard: () => pedir('GET', '/api/dashboard'),
 
   crearProyecto: (datos) => pedir('POST', '/api/proyectos', datos),
-  agregarPieza: (id, datos) => pedir('POST', ruta(id, 'agregar-pieza'), datos),
   reprogramar: (id, datos) => pedir('POST', ruta(id, 'reprogramar'), datos),
   recepcion: (id, datos) => pedir('POST', ruta(id, 'recepcion'), datos),
   recepcionParcial: (id, datos) => pedir('POST', ruta(id, 'recepcion-parcial'), datos),

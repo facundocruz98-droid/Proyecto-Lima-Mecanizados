@@ -188,6 +188,37 @@ const PLANTILLA = `
           <div id="detalleDemoras" class="detalle" hidden></div>
         </section>
 
+        <section id="etapasPausa" class="tarjeta dash-tarjeta" aria-labelledby="tituloEtapas">
+          <header class="cabecera-tarjeta">
+            <div><h2 id="tituloEtapas">Pausas por etapa</h2><p id="criterioEtapas">Pausas por fecha de ocurrencia.</p></div>
+            <div class="ayuda-grafico">
+              <button type="button" class="icono-tarjeta" popovertarget="ayudaEtapas" aria-label="Información sobre pausas por etapa">i</button>
+              <div id="ayudaEtapas" class="panel-ayuda" popover role="dialog" aria-labelledby="tituloAyudaEtapas">
+                <div class="cabecera-ayuda">
+                  <h3 id="tituloAyudaEtapas">Pausas por etapa</h3>
+                  <button type="button" class="cerrar-ayuda" popovertarget="ayudaEtapas" popovertargetaction="hide" aria-label="Cerrar información" autofocus>×</button>
+                </div>
+                <h4>¿Qué muestra?</h4>
+                <p>Muestra en qué etapa del taller estaban los trabajos cuando se pausaron (las etapas son las del plan de fabricación de cada pedido). Podés ver cuántas pausas hubo en cada etapa o cuántos proyectos fueron afectados.</p>
+                <h4>¿Para qué sirve?</h4>
+                <p>Permite identificar en qué parte del proceso se frena la producción.</p>
+                <h4>¿Cómo ayuda a tomar decisiones?</h4>
+                <p>Si una etapa concentra las pausas, revisá sus máquinas, su personal o los materiales que necesita antes de que el trabajo llegue a ella.</p>
+              </div>
+            </div>
+          </header>
+          <form id="filtrosEtapas" class="filtros">
+            <div class="controles">
+              <label>Indicador<select name="indicador"><option value="pausas">Cantidad de pausas</option><option value="afectados">Proyectos afectados</option></select></label>
+            </div>
+          </form>
+          <p id="avisoEtapas" class="aviso-grafico" role="status" hidden></p>
+          <p id="vacioEtapas" class="vacio-grafico" role="status"></p>
+          <div class="desplazable"><div id="zonaEtapas" class="zona" hidden><canvas id="barrasEtapas" aria-hidden="true"></canvas></div></div>
+          <div id="controlesEtapa" class="controles selector-detalle" hidden><label>Consultar historial de<select id="grupoEtapas"></select></label></div>
+          <div id="detalleEtapas" class="detalle" hidden></div>
+        </section>
+
         <template id="plantillaFechas">
           <label>Período<select name="periodo"><option value="todos">Todo el historial</option><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option><option value="365">Últimos 365 días</option><option value="dia">Día específico</option><option value="mes">Mes específico</option><option value="anio">Año específico</option><option value="rango">Rango personalizado</option></select></label>
           <label data-fecha="dia" hidden>Día<input name="dia" type="date"></label>
@@ -229,7 +260,7 @@ function iniciar(raiz) {
     // "etapa" y "reprogramar" son eventos del sistema que no cambian el estado del proyecto.
     const eventosInformativos = new Set(["recepcion_parcial", "etapa_inicio", "etapa_fin", "etapa", "reprogramar"]);
     const charts = new Map();
-    const formularios = [ui.filtrosEstado, ui.filtrosLinea, ui.filtrosDemoras];
+    const formularios = [ui.filtrosEstado, ui.filtrosLinea, ui.filtrosDemoras, ui.filtrosEtapas];
     let datos;
     let cruceEstado = null;
     let versionCarga = 0;
@@ -275,10 +306,11 @@ function iniciar(raiz) {
             }
             const causa = texto(evento.causa);
             const detalle = texto(evento.detalle);
+            const etapa = texto(evento.etapa);
             const clave = JSON.stringify([tipo, instante, normalizar(causa), tipo.startsWith("etapa") ? evento.etapa : ""]);
             if (vistos.has(clave)) continue;
             vistos.add(clave);
-            eventos.push({ tipo, instante, dia: fechaLocal.format(new Date(instante)), causa, detalle });
+            eventos.push({ tipo, instante, dia: fechaLocal.format(new Date(instante)), causa, detalle, etapa });
         }
         eventos.sort((a, b) => a.instante - b.instante);
         return { eventos, sinFecha };
@@ -619,6 +651,7 @@ function iniciar(raiz) {
                 mostrarCruce();
                 mostrarLinea();
                 mostrarDemoras();
+                mostrarEtapas();
                 aplicar.textContent = "Cruce aplicado";
                 aplicar.disabled = true;
                 ui.quitarCruce.focus();
@@ -798,18 +831,29 @@ function iniciar(raiz) {
         }
     };
 
-    function mostrarDemoras() {
-        ui.detalleDemoras.hidden = true;
-        ui.controlesCausa.hidden = true;
-        if (!datos) return estadoVisual("Demoras", ui.zonaDemoras, sinArchivo);
-        const form = ui.filtrosDemoras;
+    /** Gráfico de barras de pausas agrupadas por causa o por etapa (misma lógica, mismos filtros, mismo detalle). */
+    const vistasPausas = {
+        Demoras: { form: ui.filtrosDemoras, zona: ui.zonaDemoras, criterio: ui.criterioDemoras, canvas: ui.barras,
+            controles: ui.controlesCausa, grupo: ui.grupoDemoras, detalle: ui.detalleDemoras,
+            clave: pausa => pausa.causa, columna: "Causa" },
+        Etapas: { form: ui.filtrosEtapas, zona: ui.zonaEtapas, criterio: ui.criterioEtapas, canvas: ui.barrasEtapas,
+            controles: ui.controlesEtapa, grupo: ui.grupoEtapas, detalle: ui.detalleEtapas,
+            clave: pausa => pausa.etapa, columna: "Etapa" }
+    };
+
+    function mostrarPausasPor(sufijo) {
+        const v = vistasPausas[sufijo];
+        v.detalle.hidden = true;
+        v.controles.hidden = true;
+        if (!datos) return estadoVisual(sufijo, v.zona, sinArchivo);
+        const form = v.form;
         const periodo = periodoFormulario(ui.filtrosGenerales);
-        if (!periodo) return estadoVisual("Demoras", ui.zonaDemoras, periodoInvalido);
+        if (!periodo) return estadoVisual(sufijo, v.zona, periodoInvalido);
         const proyectos = proyectosFiltrados(true);
-        if (proyectos.length && !proyectos.some(p => p.historial)) return estadoVisual("Demoras", ui.zonaDemoras, "No hay historiales de eventos legibles.");
+        if (proyectos.length && !proyectos.some(p => p.historial)) return estadoVisual(sufijo, v.zona, "No hay historiales de eventos legibles.");
         const indicador = campo(form, "indicador").value;
         const eje = indicador === "afectados" ? "Proyectos únicos" : "Pausas";
-        ui.criterioDemoras.textContent = periodoLargo(periodo);
+        v.criterio.textContent = periodoLargo(periodo);
         const grupos = new Map();
         let abiertas = 0;
         let incompletos = 0;
@@ -820,7 +864,7 @@ function iniciar(raiz) {
                 const cierre = pausa.cierre?.dia <= periodo.fin ? pausa.cierre : null;
                 const duracion = cierre ? (cierre.instante - pausa.instante) / 3_600_000 : null;
                 if (!cierre) abiertas++;
-                const nombre = etiqueta(pausa.causa);
+                const nombre = etiqueta(v.clave(pausa));
                 const clave = normalizar(nombre);
                 if (!grupos.has(clave)) grupos.set(clave, { nombre, ids: new Set(), registros: [] });
                 const g = grupos.get(clave);
@@ -836,26 +880,27 @@ function iniciar(raiz) {
             incompletos ? numero.format(incompletos) + " proyectos con historial incompleto." : ""
         ].filter(Boolean).join(" ");
         const mensaje = barras.length ? "" : "No hay pausas para estos filtros.";
-        estadoVisual("Demoras", ui.zonaDemoras, mensaje, avisos);
-        ui.zonaDemoras.style.height = Math.max(255, 65 + barras.length * 35) + "px";
+        estadoVisual(sufijo, v.zona, mensaje, avisos);
+        v.zona.style.height = Math.max(255, 65 + barras.length * 35) + "px";
 
         function elegir(i) {
-            ui.grupoDemoras.value = i < 0 ? "" : String(i);
+            v.grupo.value = i < 0 ? "" : String(i);
             const g = barras[i];
             if (!g) {
-                ui.detalleDemoras.hidden = true;
+                v.detalle.hidden = true;
                 return;
             }
-            tablaDetalle(ui.detalleDemoras, g.nombre + " · " + numero.format(g.ids.size) + " proyectos",
-                ["Proyecto", "Cliente", "Causa", "Pausa", "Reanudación", "Duración", "Detalle del evento"],
-                g.registros.map(({ p, pausa, cierre, duracion }) => [p.id, etiqueta(p.cliente), etiqueta(pausa.causa), fecha(pausa.dia),
-                    cierre ? fecha(cierre.dia) : "Abierta al cierre", horas(duracion), etiqueta(pausa.detalle)]),
-                () => { elegir(-1); ui.grupoDemoras.focus(); });
+            const otra = sufijo === "Etapas" ? ["Causa", pausa => pausa.causa] : ["Etapa", pausa => pausa.etapa];
+            tablaDetalle(v.detalle, g.nombre + " · " + numero.format(g.ids.size) + " proyectos",
+                ["Proyecto", "Cliente", v.columna, otra[0], "Pausa", "Reanudación", "Duración", "Detalle del evento"],
+                g.registros.map(({ p, pausa, cierre, duracion }) => [p.id, etiqueta(p.cliente), etiqueta(v.clave(pausa)), etiqueta(otra[1](pausa)),
+                    fecha(pausa.dia), cierre ? fecha(cierre.dia) : "Abierta al cierre", horas(duracion), etiqueta(pausa.detalle)]),
+                () => { elegir(-1); v.grupo.focus(); });
         }
-        ui.controlesCausa.hidden = !barras.length;
-        opcionesDetalle(ui.grupoDemoras, barras.map(g => ({ titulo: g.nombre })), "Elegí una categoría", elegir);
+        v.controles.hidden = !barras.length;
+        opcionesDetalle(v.grupo, barras.map(g => ({ titulo: g.nombre })), "Elegí una categoría", elegir);
         if (mensaje) return;
-        dibujar(ui.barras, "bar", {
+        dibujar(v.canvas, "bar", {
             labels: barras.map(g => g.nombre),
             datasets: [{ data: barras.map(valor), backgroundColor: barras.map((_, i) => colores[i % colores.length]), borderRadius: 5, maxBarThickness: 26 }]
         }, {
@@ -870,6 +915,9 @@ function iniciar(raiz) {
             } } } }
         }, [rotulosBarras]);
     }
+
+    function mostrarDemoras() { mostrarPausasPor("Demoras"); }
+    function mostrarEtapas() { mostrarPausasPor("Etapas"); }
 
     function proyectosFiltrados(aplicarCruce = false) {
         const cliente = campo(ui.filtrosGenerales, "cliente").value;
@@ -893,6 +941,7 @@ function iniciar(raiz) {
         mostrarEstado();
         mostrarLinea();
         mostrarDemoras();
+        mostrarEtapas();
     }
 
     const generales = ui.filtrosGenerales;
@@ -934,6 +983,7 @@ function iniciar(raiz) {
     });
     ui.filtrosLinea.addEventListener("input", mostrarLinea);
     ui.filtrosDemoras.addEventListener("input", mostrarDemoras);
+    ui.filtrosEtapas.addEventListener("input", mostrarEtapas);
 
     ui.fechaKpi.addEventListener("input", mostrarKpis);
     ui.ventanaKpi.addEventListener("input", mostrarKpis);

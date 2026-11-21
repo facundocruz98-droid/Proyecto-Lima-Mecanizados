@@ -439,19 +439,6 @@ textarea { min-height: 84px; resize: vertical; }
 .resumen div { background: var(--superficie-2); border-radius: var(--radio-chico); padding: 11px 14px; }
 .resumen dt { font-size: 12px; color: var(--texto-suave); }
 .resumen dd { margin: 2px 0 0; font-weight: 600; font-size: 15.5px; }
-.linea-tiempo { list-style: none; margin: 0; padding: 4px 0 0; }
-.linea-tiempo li { display: grid; grid-template-columns: 18px 1fr; gap: 14px; position: relative; padding-bottom: 18px; }
-.linea-tiempo li::before { content: ""; position: absolute; left: 8px; top: 18px; bottom: 0; width: 2px; background: var(--borde); }
-.linea-tiempo li:last-child { padding-bottom: 0; }
-.linea-tiempo li:last-child::before { display: none; }
-.punto { width: 18px; height: 18px; border-radius: 50%; margin-top: 2px; border: 4px solid var(--superficie); background: var(--neutro); box-shadow: 0 0 0 2px var(--neutro); }
-.punto.p-pausa { background: var(--mal); box-shadow: 0 0 0 2px var(--mal); }
-.punto.p-inicio, .punto.p-continuar { background: var(--ok); box-shadow: 0 0 0 2px var(--ok); }
-.punto.p-finalizar { background: var(--acento); box-shadow: 0 0 0 2px var(--acento); }
-.punto.p-reprogramar { background: var(--alerta); box-shadow: 0 0 0 2px var(--alerta); }
-.evento-titulo { font-weight: 600; }
-.evento-meta { color: var(--texto-suave); font-size: 12.5px; }
-.evento-detalle { font-size: 13.5px; margin-top: 2px; }
 .barras { display: flex; flex-direction: column; gap: 14px; }
 .barra-fila { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 14px; }
 .barra-fila .valor { color: var(--texto-suave); font-variant-numeric: tabular-nums; font-size: 13px; }
@@ -736,7 +723,6 @@ textarea { min-height: 84px; resize: vertical; }
 .fila-cancelado strong { text-decoration: line-through; text-decoration-color: var(--texto-tenue); }
 .indicadores { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 900px) { .indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.punto.p-cancelar { background: var(--neutro); box-shadow: 0 0 0 2px var(--neutro); }
 
 /* ---------- Puesto de taller · Plan de fabricación y avance por etapas ---------- */
 .boton-taller small { display: block; font: 600 13px var(--fuente); opacity: .85; margin-top: -4px; max-width: 100%;
@@ -818,12 +804,6 @@ textarea { min-height: 84px; resize: vertical; }
 }
 
 /* Historial · plan de fabricación */
-.punto.p-etapa_inicio { background: var(--ok); box-shadow: 0 0 0 2px var(--ok); }
-.punto.p-etapa_fin { background: var(--superficie); box-shadow: 0 0 0 2px var(--ok); }
-.tabla-envoltura { overflow-x: auto; border: 1px solid var(--borde); border-radius: var(--radio-chico); }
-.tabla-plan th, .tabla-plan td { padding: 7px 10px; white-space: nowrap; }
-.tabla-plan tr.plan-en_curso td { background: var(--acento-suave); }
-.tabla-plan tr.plan-pendiente td, .tabla-plan tr.plan-lista td { color: var(--texto-tenue); }
 
 /* Alta de proyecto: una sola columna, sin tarjeta lateral */
 .alta-unica { max-width: 900px; margin-inline: auto; }
@@ -832,18 +812,6 @@ textarea { min-height: 84px; resize: vertical; }
 @media (max-width: 1100px) { .par.tres { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 820px) { .par.tres { grid-template-columns: minmax(0, 1fr); } }
 
-/* Pedidos con varias piezas */
-.piezas-pedido { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-.pieza-ficha { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--borde-fuerte);
-  border-radius: 999px; font-size: 13.5px; color: var(--texto); text-decoration: none; background: var(--superficie-2); }
-.pieza-ficha .codigo { font-size: 12.5px; }
-a.pieza-ficha:hover { border-color: var(--acento); color: var(--acento); }
-.pieza-ficha.actual { border-color: var(--acento); background: var(--acento-suave); }
-.pieza-de-pedido { display: grid; gap: 6px; margin: 12px 0 16px; padding: 12px 14px; border-radius: var(--radio-chico);
-  background: var(--superficie-2); border: 1px solid var(--borde); }
-.pieza-de-pedido div { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.pieza-de-pedido span:first-child { min-width: 110px; font-size: 12.5px; color: var(--texto-tenue); text-transform: uppercase; letter-spacing: .05em; }
-.pieza-de-pedido strong { font-weight: 600; }
 
 /* Crear pedido: varias piezas */
 .alta-piezas { display: grid; gap: 12px; margin-top: 6px; }
@@ -869,3 +837,45 @@ a.pieza-ficha:hover { border-color: var(--acento); color: var(--acento); }
   border-color: var(--acento); background: var(--superficie); box-shadow: 0 14px 32px rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .2); }
 .plan-lista li.arrastrando .plan-agarre { color: var(--acento); }
 .plan-lista li.aterrizando { transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s ease; box-shadow: 0 2px 6px rgba(0, 0, 0, .15); }
+
+/* ---------- Historial · línea de tiempo (agrupada por día) ---------- */
+.tl-cabeza { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid var(--borde); }
+.tl-cabeza h3 { font: 600 16px var(--fuente-titulo); }
+.tl-cabeza span { color: var(--texto-tenue); font-size: 13px; }
+.tl { display: grid; gap: 18px; }
+.tl-dia-titulo { font-size: 13px; font-weight: 700; color: var(--texto); margin: 0 0 6px 2px; }
+.tl-dia-titulo span { font-weight: 400; color: var(--texto-tenue); margin-left: 6px; }
+.tl-lista { list-style: none; margin: 0; padding: 0; }
+.tl-item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 14px; align-items: start;
+  padding: 10px 12px; border-radius: 10px; position: relative; transition: background-color .15s; }
+.tl-item:hover { background: var(--superficie-2); }
+.tl-item.reciente { background: var(--superficie-2); box-shadow: inset 0 0 0 1px var(--borde); }
+.tl-item:not(:last-child)::before { content: ""; position: absolute; left: 29px; top: 48px; bottom: -8px; width: 2px;
+  background: var(--borde); border-radius: 2px; }
+.tl-icono { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; position: relative; z-index: 1; }
+.tl-icono svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tl-icono.t-ok { background: var(--ok-fondo); color: var(--ok); }
+.tl-icono.t-mal { background: var(--mal-fondo); color: var(--mal); }
+.tl-icono.t-info { background: var(--acento-suave); color: var(--acento); }
+.tl-icono.t-fin { background: var(--acento); color: var(--sobre-acento); }
+.tl-icono.t-alerta { background: var(--alerta-fondo); color: var(--alerta); }
+.tl-icono.t-neutro { background: var(--neutro-fondo); color: var(--neutro); }
+.tl-cuerpo { min-width: 0; padding-top: 1px; }
+.tl-titulo { margin: 0; font-weight: 600; font-size: 14.5px; line-height: 1.35; }
+.tl-etapa { font-weight: 600; color: var(--texto-suave); }
+.tl-meta { margin: 2px 0 0; font-size: 13px; color: var(--texto-suave); overflow-wrap: anywhere; }
+.tl-chips, .tl-plan { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.tl-chip { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--superficie-3); color: var(--texto-suave); }
+.tl-chip.mal { background: var(--mal-fondo); color: var(--mal); }
+.tl-chip.alerta { background: var(--alerta-fondo); color: var(--alerta); }
+.tl-flecha { color: var(--texto-tenue); font-size: 12px; }
+.tl-nota { margin: 8px 0 0; padding: 7px 11px; border-left: 3px solid var(--mal); border-radius: 6px; background: var(--superficie-2);
+  font-size: 13.5px; color: var(--texto); }
+.tl-item.reciente .tl-nota { background: var(--superficie); }
+.tl-hora { font-size: 13px; font-weight: 600; color: var(--texto-suave); font-variant-numeric: tabular-nums; padding-top: 2px; white-space: nowrap; }
+@media (max-width: 560px) {
+  .tl-item { grid-template-columns: 32px minmax(0, 1fr); }
+  .tl-hora { grid-column: 2; padding-top: 0; }
+  .tl-item:not(:last-child)::before { left: 27px; }
+}

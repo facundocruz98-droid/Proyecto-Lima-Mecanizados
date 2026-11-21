@@ -342,7 +342,7 @@ function cuerpoTrabajo(p) {
       <form class="bloqueo" id="formPausa" novalidate autocomplete="off">
         <h3>Motivo de la pausa (obligatorio)${etapa ? ` · etapa ${esc(etapa.nombre)}` : ''}</h3>
         <div class="campo" style="margin-top:10px"><label for="pausaCausa">Causa</label>
-          <select id="pausaCausa"><option value="">Elegí una causa…</option>${ctx.catalogo.causas.map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
+          <select id="pausaCausa" required><option value="" disabled selected hidden>Elegí una causa…</option>${ctx.catalogo.causas.map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
         <div class="campo"><label for="pausaDetalle">Qué pasó</label>
           <textarea id="pausaDetalle" maxlength="300" placeholder="Ej.: faltan las ruedas · torno roto"></textarea></div>
         <p class="error" id="pausaError" role="alert"></p>

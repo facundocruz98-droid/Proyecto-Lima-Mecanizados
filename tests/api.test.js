@@ -199,31 +199,9 @@ test('ciclo completo de un proyecto: alta → recepción → inicio → pausa �
   }
 });
 
-test('agregar pieza: conserva el número de orden y usa el siguiente ítem libre', async () => {
-  const pieza = { id_usuario: GERENCIA, nombre: 'Escalera de acceso', plazo_entrega: '2026-11-30', materiales: ['Planchuela'] };
-  // 0643 ya tiene los ítems 01 y 02 → la pieza nueva es la 03, del mismo cliente.
-  let r = await pedir('POST', '/api/proyectos/0643-MPU-U-02/agregar-pieza', pieza);
-  assert.equal(r.estado, 200);
-  assert.equal(r.datos.id, '0643-MPU-U-03');
-  assert.equal(r.datos.numero, 643);
-  assert.equal(r.datos.cliente, 'Minera Puna (ejemplo)');
-  assert.equal(r.datos.estado, 'pendiente_mat');
-  assert.deepEqual(r.datos.piezas_del_pedido.map((p) => p.id), ['0643-MPU-U-01', '0643-MPU-U-02', '0643-MPU-U-03']);
-  // La urgencia se puede elegir para la pieza; el ítem sigue siendo el siguiente del número.
-  r = await pedir('POST', '/api/proyectos/0643-MPU-U-01/agregar-pieza', { ...pieza, nombre: 'Soportes', urgencia: 'E' });
-  assert.equal(r.datos.id, '0643-MPU-E-04');
-  // Los códigos ya emitidos no cambian y se siguen escaneando igual.
-  const original = await pedir('GET', '/api/proyectos/0643-MPU-U-01');
-  assert.equal(original.estado, 200);
-  assert.equal(original.datos.nombre, 'Tanque acero inoxidable 2000 L');
-  // La pieza nueva tiene su propio link de seguimiento para el cliente.
-  const seguimiento = await pedir('GET', `/api/seguimiento/${r.datos.token_cliente}`);
-  assert.equal(seguimiento.datos.id, '0643-MPU-E-04');
-  // Validaciones: solo Gerencia, con nombre de la pieza.
-  r = await pedir('POST', '/api/proyectos/0643-MPU-U-01/agregar-pieza', { ...pieza, id_usuario: OPERARIO });
-  assert.equal(r.estado, 403);
-  r = await pedir('POST', '/api/proyectos/0643-MPU-U-01/agregar-pieza', { ...pieza, nombre: ' ' });
-  assert.match(r.datos.error, /nombre de la pieza/);
+test('"Agregar pieza" ya no existe: las piezas se cargan todas al crear el pedido', async () => {
+  const r = await pedir('POST', '/api/proyectos/0643-MPU-U-02/agregar-pieza', { id_usuario: GERENCIA, nombre: 'X' });
+  assert.equal(r.estado, 404);
 });
 
 test('reprogramar: solo Gerencia y siempre con motivo', async () => {

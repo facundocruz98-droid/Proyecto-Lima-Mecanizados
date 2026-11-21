@@ -1,7 +1,6 @@
-/** Historial de cada proyecto y causas de demora más frecuentes (base de los KPI). */
+/** Historial de cada proyecto: datos principales y línea de tiempo. (Las causas de pausa están en el Dashboard.) */
 import { api } from '../api.js';
-import { campoFecha } from '../calendario.js';
-import { avisar, codigoConUrgencia, duracion, esc, fecha, fechaDeInstante, fechaHora, icono, pastillaEstado, textoEtapa, textoPlazo } from '../util.js';
+import { codigoConUrgencia, duracion, esc, fecha, fechaDeInstante, fechaHora, icono, pastillaEstado, textoEtapa, textoPlazo } from '../util.js';
 
 let raiz;
 let ctx;
@@ -25,117 +24,95 @@ const TITULOS = {
   cancelar: 'Proyecto cancelado',
 };
 
-const ESTADO_ETAPA = { completada: 'Completada', en_curso: 'En curso', lista: 'Por iniciar', pendiente: 'Pendiente' };
+// ---------- Línea de tiempo ----------
+/** Ícono y color de cada tipo de evento (trazo simple, mismo estilo que el resto del sistema). */
+const ICONOS_EVENTO = {
+  alta: ['neutro', '<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2.5" width="6" height="3.5" rx="1"/><path d="M9 11h6M9 15h4"/>'],
+  recepcion: ['info', '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>'],
+  recepcion_parcial: ['info', '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>'],
+  inicio: ['ok', '<path d="M8 5.5v13l10.5-6.5z"/>'],
+  etapa_inicio: ['ok', '<path d="M8 5.5v13l10.5-6.5z"/>'],
+  continuar: ['ok', '<path d="M8 5.5v13l10.5-6.5z"/>'],
+  etapa_fin: ['ok', '<path d="M5 12.5l4.5 4.5L19 7.5"/>'],
+  etapa: ['neutro', '<path d="M5 12h12M12 6l6 6-6 6"/>'],
+  pausa: ['mal', '<rect x="7" y="5.5" width="3.5" height="13" rx="1"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1"/>'],
+  finalizar: ['fin', '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>'],
+  reprogramar: ['alerta', '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'],
+  cancelar: ['neutro', '<path d="M6 6l12 12M18 6L6 18"/>'],
+};
 
-/** Plan de fabricación del pedido: cada etapa con su inicio, fin y duración real. */
-function planHistorial(p) {
-  if (!p.tiene_plan) return '';
-  return `
-    <p class="seccion-titulo" style="margin-bottom:8px">Plan de fabricación</p>
-    <div class="tabla-envoltura"><table class="tabla-plan">
-      <thead><tr><th>#</th><th>Etapa</th><th>Estado</th><th>Inicio</th><th>Fin</th><th>Duración</th></tr></thead>
-      <tbody>${p.plan.map((e) => `
-        <tr class="plan-${e.estado}">
-          <td class="num">${e.orden}</td><td><strong>${esc(e.nombre)}</strong></td><td>${ESTADO_ETAPA[e.estado]}</td>
-          <td class="num">${e.inicio ? fechaHora(e.inicio) : '—'}</td><td class="num">${e.fin ? fechaHora(e.fin) : '—'}</td>
-          <td class="num">${e.inicio && e.fin ? duracion((Date.parse(e.fin) - Date.parse(e.inicio)) / 3600000) : '—'}</td>
-        </tr>`).join('')}
-      </tbody></table></div>
-    <p class="chico suave" style="margin:6px 0 4px">La duración de cada etapa incluye sus pausas. La espera entre etapas no cuenta como fabricación.</p>`;
+const dos = (n) => String(n).padStart(2, '0');
+const diaLocal = (iso) => { const f = new Date(iso); return `${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}`; };
+const horaLocal = (iso) => { const f = new Date(iso); return `${dos(f.getHours())}:${dos(f.getMinutes())}`; };
+
+/** "Hoy", "Ayer" o "Viernes 13 de noviembre" (con el año si no es el actual). */
+function tituloDia(dia) {
+  const hoy = diaLocal(new Date().toISOString());
+  const ayer = new Date(); ayer.setDate(ayer.getDate() - 1);
+  const [a, m, d] = dia.split('-').map(Number);
+  const opciones = { weekday: 'long', day: 'numeric', month: 'long' };
+  if (a !== new Date().getFullYear()) opciones.year = 'numeric';
+  const largo = new Date(a, m - 1, d).toLocaleDateString('es-AR', opciones).replace(',', '');
+  const capital = largo.charAt(0).toUpperCase() + largo.slice(1);
+  if (dia === hoy) return `Hoy <span>${esc(capital)}</span>`;
+  if (dia === diaLocal(ayer.toISOString())) return `Ayer <span>${esc(capital)}</span>`;
+  return esc(capital);
 }
 
-const numeroDe = (p) => String(p.numero).padStart(4, '0');
-
-/** Las piezas del mismo pedido (mismo número de orden), con link a cada una. */
-function piezasHistorial(p) {
-  const piezas = p.piezas_del_pedido || [];
-  if (piezas.length < 2) return '';
-  return `
-    <p class="seccion-titulo" style="margin-bottom:8px">Piezas del pedido ${numeroDe(p)} · ${piezas.length}</p>
-    <div class="piezas-pedido">${piezas.map((x) => x.id === p.id
-      ? `<span class="pieza-ficha actual"><span class="codigo">${esc(x.id)}</span>${esc(x.nombre)}</span>`
-      : `<a class="pieza-ficha" href="#historial/${encodeURIComponent(x.id)}"><span class="codigo">${esc(x.id)}</span>${esc(x.nombre)}</a>`).join('')}
-    </div>`;
-}
-
-function sumarDias(iso, dias) {
-  const [a, m, d] = iso.split('-').map(Number);
-  const f = new Date(a, m - 1, d + dias);
-  const dos = (n) => String(n).padStart(2, '0');
-  return `${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}`;
-}
-
-/**
- * "Agregar pieza": conserva el número de orden y el cliente del pedido;
- * al guardar, el sistema asigna el siguiente ítem disponible.
- */
-function abrirAgregarPieza(p) {
-  // El pedido que se está mirando siempre es una de sus piezas (aunque el servidor no mande la lista).
-  const lista = p.piezas_del_pedido || [];
-  const piezas = lista.some((x) => x.id === p.id) ? lista : [...lista, { id: p.id, item: p.item, nombre: p.nombre }];
-  const nombrePedido = (piezas.find((x) => x.item === 1) || piezas[0]).nombre;
-  const siguienteItem = Math.max(0, ...piezas.map((x) => x.item)) + 1;
-  const hoy = ctx.catalogo.hoy;
-  const plazo = p.plazo_entrega >= hoy ? p.plazo_entrega : sumarDias(hoy, 14);
-  const dialogo = ctx.abrirDialogo(`
-    <form id="formPieza" novalidate autocomplete="off">
-      <h2>Agregar pieza</h2>
-      <div class="pieza-de-pedido">
-        <div><span>Pedido</span><strong><span class="codigo">${numeroDe(p)}</span> · ${esc(nombrePedido)}</strong></div>
-        <div><span>Cliente</span><strong>${esc(p.cliente)}</strong></div>
-        <div><span>Piezas actuales</span><strong>${piezas.length}</strong></div>
-      </div>
-      <div class="campo"><label for="pzNombre">Nombre de la pieza</label>
-        <input id="pzNombre" maxlength="120" placeholder="Ej.: Escalera de acceso"></div>
-      <div class="campo"><label for="pzDescripcion">Descripción</label>
-        <input id="pzDescripcion" maxlength="300" placeholder="Ej.: Fabricar y pintar"></div>
-      <div class="par">
-        <div class="campo"><label for="pzUrgencia">Urgencia</label>
-          <select id="pzUrgencia"><option value="E">E · Estándar</option><option value="U">U · Urgente</option></select></div>
-        <div class="campo"><label for="pzPlazo">Plazo de entrega</label>
-          <input type="date" id="pzPlazo" value="${esc(plazo)}" min="${esc(hoy)}"></div>
-      </div>
-      <div class="campo"><label for="pzMateriales">Materiales indispensables para iniciar</label>
-        <textarea id="pzMateriales" placeholder="Uno por línea"></textarea></div>
-      <div class="vista-previa-id" id="pzVistaPrevia"></div>
-      <p class="error" id="pzError" role="alert"></p>
-      <div class="acciones-form">
-        <button class="boton" type="submit">Agregar pieza</button>
-        <button class="boton secundario" type="button" data-cerrar>Cancelar</button>
-      </div>
-    </form>`);
-  const $ = (id) => dialogo.querySelector(`#${id}`);
-  $('pzUrgencia').value = p.urgencia;
-  campoFecha($('pzPlazo'), { hoy, atajos: [['+7 días', 7], ['+15 días', 15], ['+30 días', 30]] });
-  const vistaPrevia = () => {
-    const id = `${numeroDe(p)}-${p.codigo_cliente}-${$('pzUrgencia').value}-${String(siguienteItem).padStart(2, '0')}`;
-    $('pzVistaPrevia').innerHTML = `<span>ID que se va a generar</span><span class="codigo">${esc(id)}</span>`;
-  };
-  $('pzUrgencia').addEventListener('change', vistaPrevia);
-  vistaPrevia();
-  $('pzNombre').focus();
-  $('formPieza').addEventListener('submit', async (evento) => {
-    evento.preventDefault();
-    const boton = evento.submitter;
-    $('pzError').textContent = '';
-    if (boton) boton.disabled = true;
-    try {
-      const nueva = await api.agregarPieza(p.id, {
-        id_usuario: ctx.usuarioConRol('Gerencia'),
-        nombre: $('pzNombre').value,
-        descripcion: $('pzDescripcion').value,
-        urgencia: $('pzUrgencia').value,
-        plazo_entrega: $('pzPlazo').value,
-        materiales: $('pzMateriales').value.split('\n'),
-      });
-      ctx.cerrarDialogo();
-      avisar(`Pieza ${nueva.id} agregada al pedido ${numeroDe(p)}. Queda esperando materiales en Compras.`);
-      ctx.navegar('historial', nueva.id);
-    } catch (e) {
-      $('pzError').textContent = e.message;
-      if (boton) boton.disabled = false;
-    }
+/** Cuánto duró cada pausa: hasta el siguiente "continuar", "finalizar" o "cancelar". */
+function duracionesDePausas(eventos) {
+  const resultado = new Map();
+  eventos.forEach((e, i) => {
+    if (e.tipo !== 'pausa') return;
+    const cierre = eventos.slice(i + 1).find((x) => ['continuar', 'finalizar', 'cancelar'].includes(x.tipo));
+    resultado.set(e, cierre ? (Date.parse(cierre.fecha_hora) - Date.parse(e.fecha_hora)) / 3600000 : null);
   });
+  return resultado;
+}
+
+function eventoHTML(e, duraciones, reciente) {
+  const [tono, trazo] = ICONOS_EVENTO[e.tipo] || ICONOS_EVENTO.etapa;
+  const conEtapa = ['etapa', 'inicio', 'etapa_inicio', 'etapa_fin', 'pausa', 'continuar'].includes(e.tipo) && e.etapa;
+  const titulo = `${esc(TITULOS[e.tipo] || e.tipo)}${conEtapa ? ` <span class="tl-etapa">· ${esc(e.etapa)}</span>` : ''}`;
+  let extra = '';
+  const plan = e.tipo === 'inicio' && /^Plan: /.test(e.detalle || '') ? e.detalle.slice(6).split(' → ') : null;
+  if (plan) {
+    extra = `<div class="tl-plan">${plan.map((x, i) => `${i ? '<span class="tl-flecha">→</span>' : ''}<span class="tl-chip">${esc(x)}</span>`).join('')}</div>`;
+  } else if (e.tipo === 'pausa') {
+    const horas = duraciones.get(e);
+    extra = `<div class="tl-chips"><span class="tl-chip mal">${esc(e.causa || 'Pausa')}</span>
+        <span class="tl-chip ${horas === null ? 'alerta' : ''}">${horas === null ? 'En curso' : `Detenido ${duracion(horas)}`}</span></div>
+      ${e.detalle ? `<p class="tl-nota">${esc(e.detalle)}</p>` : ''}`;
+  }
+  const meta = [esc(e.usuario), !plan && e.tipo !== 'pausa' && e.detalle ? esc(e.detalle) : ''].filter(Boolean).join(' · ');
+  return `
+    <li class="tl-item${reciente ? ' reciente' : ''}">
+      <span class="tl-icono t-${tono}" aria-hidden="true"><svg viewBox="0 0 24 24">${trazo}</svg></span>
+      <div class="tl-cuerpo">
+        <p class="tl-titulo">${titulo}</p>
+        <p class="tl-meta">${meta}</p>
+        ${extra}
+      </div>
+      <time class="tl-hora" datetime="${esc(e.fecha_hora)}" title="${esc(fechaHora(e.fecha_hora))}">${horaLocal(e.fecha_hora)}</time>
+    </li>`;
+}
+
+/** Línea de tiempo agrupada por día, lo más reciente primero. */
+function pintarLineaDeTiempo(eventos) {
+  const duraciones = duracionesDePausas(eventos);
+  const recientes = [...eventos].reverse();
+  const dias = [];
+  for (const e of recientes) {
+    const dia = diaLocal(e.fecha_hora);
+    if (!dias.length || dias[dias.length - 1].dia !== dia) dias.push({ dia, eventos: [] });
+    dias[dias.length - 1].eventos.push(e);
+  }
+  el('cantidadEventos').textContent = eventos.length === 1 ? '1 evento' : `${eventos.length} eventos`;
+  el('linea').innerHTML = dias.map((d, i) => `
+    <section class="tl-dia">
+      <h4 class="tl-dia-titulo">${tituloDia(d.dia)}</h4>
+      <ol class="tl-lista">${d.eventos.map((e, k) => eventoHTML(e, duraciones, i === 0 && k === 0)).join('')}</ol>
+    </section>`).join('');
 }
 
 function pintarProyecto(p) {
@@ -145,8 +122,7 @@ function pintarProyecto(p) {
       <div>${codigoConUrgencia(p)}<h3 style="font-size:18px;margin-top:2px">${esc(p.nombre)}</h3>
         <p class="chico suave">${esc(p.cliente)}</p></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${pastillaEstado(p)}
-        ${p.estado === 'pendiente_mat' ? '' : `<a class="boton secundario chico" href="hoja.html?id=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><span class="ico">${icono('imprimir')}</span>Hoja de ruta</a>`}
-        ${p.estado === 'cancelado' ? '' : `<button class="boton chico" type="button" id="agregarPieza"><span class="ico">${icono('mas')}</span>Agregar pieza</button>`}</div>
+        ${p.estado === 'pendiente_mat' ? '' : `<a class="boton secundario chico" href="hoja.html?id=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><span class="ico">${icono('imprimir')}</span>Hoja de ruta</a>`}</div>
     </div>
     <dl class="resumen">
       <div><dt>Plazo de entrega</dt><dd>${fecha(p.plazo_entrega)}</dd></div>
@@ -155,38 +131,15 @@ function pintarProyecto(p) {
         : p.estado === 'cancelado' ? (p.cancelacion && p.cancelacion.fecha ? fechaDeInstante(p.cancelacion.fecha) : '—')
           : textoPlazo(p.dias_restantes)}</dd></div>
       <div><dt>Etapa actual</dt><dd>${textoEtapa(p)}</dd></div>
-      <div><dt>Listo para iniciar</dt><dd>${p.listo_desde ? fechaHora(p.listo_desde) : '—'}</dd></div>
-      <div><dt>Inicio real</dt><dd>${p.inicio_real ? fechaHora(p.inicio_real) : '—'}</dd></div>
-      ${p.listo_desde && p.inicio_real ? `<div><dt>Espera antes de iniciar</dt><dd>${duracion((Date.parse(p.inicio_real) - Date.parse(p.listo_desde)) / 3600000)}</dd></div>` : ''}
-      <div><dt>Tiempo de fabricación</dt><dd>${duracion(p.tiempos.horas_en_proceso)}</dd></div>
+      <div><dt>Tiempo en proceso</dt><dd>${duracion(p.tiempos.horas_en_proceso)}</dd></div>
       <div><dt>Tiempo detenido</dt><dd>${duracion(p.tiempos.horas_en_pausa)}</dd></div>
-    </dl>${piezasHistorial(p)}${planHistorial(p)}`;
+    </dl>`;
 
-  const eventos = [...p.eventos].reverse();
-  el('linea').innerHTML = eventos.map((e) => `
-    <li>
-      <span class="punto p-${esc(e.tipo)}"></span>
-      <div>
-        <div class="evento-titulo">${TITULOS[e.tipo] || esc(e.tipo)}${['etapa', 'inicio', 'etapa_inicio', 'etapa_fin'].includes(e.tipo) || (e.tipo === 'pausa' && e.etapa) ? ` · ${esc(e.etapa)}` : ''}${e.causa ? ` · <span style="color:var(--mal)">${esc(e.causa)}</span>` : ''}</div>
-        ${e.detalle ? `<div class="evento-detalle">${esc(e.detalle)}</div>` : ''}
-        <div class="evento-meta">${fechaHora(e.fecha_hora)} · ${esc(e.usuario)}</div>
-      </div>
-    </li>`).join('');
-}
-
-function pintarBarras(destino, filas, clave) {
-  const maximo = Math.max(1, ...filas.map((f) => f.pausas));
-  const mayor = Math.max(...filas.map((f) => f.pausas));
-  el(destino).innerHTML = filas.map((f) => `
-    <div class="barra-fila">
-      <span>${esc(f[clave])}</span>
-      <span class="valor">${f.pausas} ${f.pausas === 1 ? 'pausa' : 'pausas'}${f.pausas ? ` · ${duracion(f.horas)}` : ''}</span>
-      <div class="barra-pista"><div class="barra-relleno ${f.pausas && f.pausas === mayor ? 'principal' : ''}" style="width:${(f.pausas / maximo) * 100}%"></div></div>
-    </div>`).join('');
+  pintarLineaDeTiempo(p.eventos);
 }
 
 async function actualizar() {
-  const [proyectos, indicadores] = await Promise.all([api.proyectos(), api.indicadores()]);
+  const proyectos = await api.proyectos();
   const lista = el('proyecto');
   const ordenados = [...proyectos].sort((a, b) => a.id.localeCompare(b.id));
   lista.innerHTML = ordenados.map((p) => `<option value="${esc(p.id)}">${esc(p.id)} · ${esc(p.nombre)}</option>`).join('');
@@ -199,57 +152,34 @@ async function actualizar() {
   } else {
     el('resumen').innerHTML = '<p class="vacio">Todavía no hay proyectos.</p>';
     el('linea').innerHTML = '';
+    el('cantidadEventos').textContent = '';
   }
 
-  el('totales').textContent = indicadores.total_pausas
-    ? `${indicadores.total_pausas} ${indicadores.total_pausas === 1 ? 'pausa registrada' : 'pausas registradas'} · ${duracion(indicadores.total_horas)} detenidas en total`
-    : 'Todavía no se registraron pausas.';
-  pintarBarras('causas', indicadores.causas, 'causa');
-  pintarBarras('etapas', indicadores.etapas, 'etapa');
 }
 
 export default {
-  titulo: 'Historial y causas',
-  subtitulo: 'Todo lo que pasó con cada trabajo, y por qué se demoran.',
+  titulo: 'Historial',
+  subtitulo: '',
   async montar(elemento, contexto, parametro) {
     raiz = elemento;
     ctx = contexto;
     elegido = String(parametro || '').toUpperCase();
     raiz.innerHTML = `
-      <div class="rejilla dos">
+      <div class="historial-unico">
         <section class="tarjeta">
           <div class="tarjeta-cabeza"><h2>Historial del proyecto</h2>
             <select id="proyecto" aria-label="Proyecto" style="max-width:360px"></select></div>
           <div class="tarjeta-cuerpo">
             <div id="resumen"></div>
-            <p class="seccion-titulo" style="margin-bottom:12px">Línea de tiempo · lo más reciente primero</p>
-            <ol class="linea-tiempo" id="linea"></ol>
+            <div class="tl-cabeza"><h3>Línea de tiempo</h3><span id="cantidadEventos"></span></div>
+            <div class="tl" id="linea"></div>
           </div>
         </section>
-        <div class="columna">
-          <section class="tarjeta">
-            <div class="tarjeta-cabeza"><h2>Causas de demora</h2></div>
-            <div class="tarjeta-cuerpo">
-              <p class="nota" id="totales" style="margin-bottom:14px"></p>
-              <div class="barras" id="causas"></div>
-            </div>
-          </section>
-          <section class="tarjeta">
-            <div class="tarjeta-cabeza"><h2>Pausas por etapa</h2></div>
-            <div class="tarjeta-cuerpo">
-              <p class="nota" style="margin-bottom:14px">En qué etapa del taller se detienen los trabajos.</p>
-              <div class="barras" id="etapas"></div>
-            </div>
-          </section>
-        </div>
       </div>`;
     el('proyecto').addEventListener('change', async () => {
       elegido = el('proyecto').value;
       history.replaceState(null, '', `#historial/${encodeURIComponent(elegido)}`);
       pintarProyecto(await api.proyecto(elegido));
-    });
-    raiz.addEventListener('click', (evento) => {
-      if (evento.target.closest('#agregarPieza') && detalle) abrirAgregarPieza(detalle);
     });
     await actualizar();
   },

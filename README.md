@@ -44,7 +44,7 @@ La hoja de ruta se imprime desde Compras (tamaño A5) con código **Code 128**.
 | --- | --- | --- |
 | Panel | Gerencia / Supervisión | Semáforo de todos los trabajos, alertas y reprogramación de plazos (con motivo) |
 | Alta de proyecto | Gerencia | "Crear pedido": datos del pedido y sus piezas ("+ Agregar otra pieza"); el sistema genera un número de orden nuevo y los ítems 01, 02… |
-| Historial y causas | Gerencia / Supervisión | Línea de tiempo de cada trabajo, causas de demora y pausas por etapa |
+| Historial | Gerencia / Supervisión | Línea de tiempo de cada trabajo, sus piezas y su plan de fabricación (las causas de pausa están en el Dashboard) |
 | Planilla | Gerencia | La planilla de siempre, con "En Ejec" y "Fecha Fin" completadas por el escaneo; se descarga para Excel. "Cargar Excel" **reemplaza** todos los proyectos por los del archivo (incluidos los cancelados) |
 | Recepción y hoja de ruta | Compras | Registra la llegada de materiales, emite e imprime la hoja de ruta, atiende alertas |
 | Puesto de taller | Operario | Escanea, arma el **Plan de fabricación** al iniciar y avanza etapa por etapa: iniciar etapa, pausar, continuar, completar etapa y finalizar pedido |
@@ -57,9 +57,7 @@ La hoja de ruta se imprime desde Compras (tamaño A5) con código **Code 128**.
 3. Solo Gerencia carga o cambia el plazo de entrega, y todo cambio pide un motivo.
 4. El ID es único y sigue el formato `número-cliente-urgencia-ítem` (ej. `0645-MPU-U-01`).
    "Crear pedido" siempre usa un número de orden nuevo. Las piezas que se cargan juntas en el alta reciben los ítems
-   `01`, `02`, `03`… (comparten cliente, urgencia y fechas). Para sumar una pieza más adelante se usa
-   "Agregar pieza" en su detalle (Historial): conserva el número y el cliente y toma el siguiente ítem libre (`-02`, `-03`…).
-   Los códigos ya emitidos no cambian.
+   `01`, `02`, `03`… (comparten cliente, urgencia y fechas). Los códigos ya emitidos no cambian.
 5. "En Ejec" y "Fecha Fin" no se cargan a mano: los completa el escaneo.
 6. Semáforo: **rojo** si el plazo venció o el trabajo está pausado; **amarillo** si faltan 2 días o menos;
    **verde** en el resto. Dentro de cada color van primero los urgentes (U).
@@ -138,7 +136,6 @@ de ahí salen el historial, las alertas y los indicadores.
 | GET | `/api/proyectos` | Proyectos con semáforo, ordenados para el panel |
 | GET | `/api/proyectos/:id` | Detalle: materiales, eventos y tiempos |
 | POST | `/api/proyectos` | Crear pedido (Gerencia): número de orden nuevo, ítem 01 |
-| POST | `/api/proyectos/:id/agregar-pieza` | Agregar pieza al pedido de `:id` (Gerencia): mismo número, siguiente ítem |
 | POST | `/api/proyectos/:id/reprogramar` | Cambia el plazo con motivo (Gerencia) |
 | POST | `/api/proyectos/:id/recepcion` | Recepción de materiales indispensables (Compras) |
 | POST | `/api/proyectos/:id/recepcion-parcial` | Material que llega después (Compras) |

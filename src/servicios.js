@@ -33,7 +33,6 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     proyecto: db.prepare(`${SQL_PROYECTO} WHERE p.id = ?`),
     existeProyecto: db.prepare('SELECT 1 AS si FROM proyecto WHERE id = ?'),
     maxNumero: db.prepare('SELECT COALESCE(MAX(numero), 0) AS n FROM proyecto'),
-    maxItem: db.prepare('SELECT COALESCE(MAX(item), 0) AS n FROM proyecto WHERE numero = ?'),
     piezasDelNumero: db.prepare('SELECT id, item, nombre, estado FROM proyecto WHERE numero = ? ORDER BY item'),
     insertarProyecto: db.prepare(`INSERT INTO proyecto
       (id, numero, item, fecha_ingreso, plazo_entrega, id_cliente, nombre, descripcion,
@@ -640,26 +639,6 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     });
   }
 
-  /**
-   * "Agregar pieza" a un pedido existente: conserva el número de orden y el cliente,
-   * y usa el siguiente ítem libre de ese número (ej. 0645-FRN-E-01 → 0645-FRN-E-02).
-   * Los códigos ya emitidos no cambian.
-   */
-  function agregarPieza(idPedido, datos = {}) {
-    const usuario = exigirRol(datos.id_usuario, ['Gerencia'], 'agregar piezas a un pedido');
-    const base = buscarProyecto(idPedido);
-    if (base.estado === 'cancelado') throw new ErrorNegocio('El pedido está cancelado: no se le pueden agregar piezas.', 409);
-    const pieza = validarPieza(datos, { urgenciaPorDefecto: base.urgencia, que: 'de la pieza' });
-    return transaccion(db, () => {
-      const item = q.maxItem.get(base.numero).n + 1;
-      if (item > 99) throw new ErrorNegocio('El pedido ya tiene 99 piezas: no se pueden agregar más.', 409);
-      const id = reglas.armarId(base.numero, base.codigo_cliente, pieza.urgencia, item);
-      if (q.existeProyecto.get(id)) throw new ErrorNegocio(`El ID ${id} ya existe.`, 409);
-      return insertarPieza(id, base.numero, item, base.id_cliente, pieza, usuario.id,
-        `Pieza agregada al pedido ${String(base.numero).padStart(4, '0')} (desde ${base.id})`);
-    });
-  }
-
   /** Piezas del mismo pedido (mismo número de orden), para mostrarlas en el detalle. */
   function piezasDelPedido(numero) {
     return q.piezasDelNumero.all(numero).map((p) => ({ id: p.id, item: p.item, nombre: p.nombre, estado: p.estado }));
@@ -893,7 +872,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
 
   return {
     catalogo, listarProyectos, obtenerProyecto, seguimientoCliente, alertas, indicadores, planilla, historialPausas, datosDashboard,
-    crearProyecto, agregarPieza, importarPlanilla, reprogramar, registrarRecepcion, registrarRecepcionParcial,
+    crearProyecto, importarPlanilla, reprogramar, registrarRecepcion, registrarRecepcionParcial,
     iniciar, pausar, continuar, finalizar, completarEtapa, iniciarEtapa, catalogoEtapas,
     restablecerDemo, inicializarSiEstaVacia,
   };
