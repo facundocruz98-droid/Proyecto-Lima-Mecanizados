@@ -413,7 +413,6 @@ function pintarTrabajo() {
         <span>${esc(p.cliente)}</span>
         <span>Entrega <b>${fecha(p.plazo_entrega)}</b>${p.estado === 'finalizado' || p.estado === 'cancelado' ? '' : ` · ${textoPlazo(p.dias_restantes)}`}</span>
         ${etapaDato}
-        ${p.descripcion ? `<span>${esc(p.descripcion)}</span>` : ''}
       </div>
       ${cuerpoTrabajo(p)}
       <p class="exito" id="exito" role="status">${esc(mensaje)}</p>
@@ -534,7 +533,7 @@ async function actualizar() {
 
 export default {
   titulo: 'Puesto de taller',
-  subtitulo: 'Escaneá la hoja de ruta y registrá el avance del trabajo.',
+  subtitulo: '',
   async montar(elemento, contexto, parametro) {
     raiz = elemento;
     ctx = contexto;
@@ -558,8 +557,7 @@ export default {
             </select>
             <button class="boton" type="submit">Buscar</button>
           </form>
-          <p class="nota" style="margin-top:10px">El lector escribe el código y presiona Enter solo. Para probar sin lector, tocá un código:</p>
-          <div class="fichas" id="fichas"></div>
+          <div class="fichas" id="fichas" style="margin-top:12px"></div>
           <p class="error" id="codigoError" role="alert" style="margin:12px 0 0"></p>
           <div id="trabajo"></div>
         </div>

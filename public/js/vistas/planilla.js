@@ -121,7 +121,7 @@ async function copiar() {
 
 export default {
   titulo: 'Planilla',
-  subtitulo: 'La planilla de siempre, con "En Ejec" y "Fecha Fin" completadas por el escaneo del taller. También podés cargar proyectos desde un Excel.',
+  subtitulo: '',
   async montar(elemento, contexto) {
     raiz = elemento;
     ctx = contexto;
