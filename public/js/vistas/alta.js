@@ -1,11 +1,16 @@
-/** Alta de proyecto (Gerencia): los mismos datos que la planilla de la empresa. */
+/**
+ * Alta de proyecto (Gerencia): "Crear pedido". Los datos del pedido se cargan una vez
+ * (cliente, urgencia, fechas) y abajo sus piezas: con "+ Agregar otra pieza" se suman más.
+ * Al guardar, cada pieza recibe el mismo número de orden y su ítem: 01, 02, 03…
+ */
 import { api } from '../api.js';
 import { campoFecha } from '../calendario.js';
-import { avisar, esc } from '../util.js';
+import { avisar, esc, icono } from '../util.js';
 
 let raiz;
 let ctx;
 let siguienteNumero = 1;
+let contadorPiezas = 0; // para ids únicos de los campos de cada pieza
 
 const campo = (id) => raiz.querySelector(`#${id}`);
 
@@ -16,20 +21,50 @@ function sumarDias(hoy, dias) {
   return `${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}`;
 }
 
-/** Muestra el ID que se va a generar, a medida que se completa el formulario. */
-function pintarVistaPrevia() {
+/** Bloque de una pieza: nombre, descripción y materiales indispensables. */
+function bloquePieza() {
+  contadorPiezas += 1;
+  const n = contadorPiezas;
+  const bloque = document.createElement('fieldset');
+  bloque.className = 'alta-pieza';
+  bloque.innerHTML = `
+    <div class="alta-pieza-cabeza">
+      <span class="codigo alta-pieza-id"></span>
+      <button type="button" class="plan-icono quitar" data-quitar-pieza aria-label="Quitar esta pieza" title="Quitar esta pieza">${icono('cerrar')}</button>
+    </div>
+    <div class="campo"><label for="pz${n}Nombre">Nombre de la pieza</label>
+      <input id="pz${n}Nombre" class="pz-nombre" maxlength="120" placeholder="Ej.: Tanque de acero inoxidable 2000 L"></div>
+    <div class="campo"><label for="pz${n}Descripcion">Descripción</label>
+      <input id="pz${n}Descripcion" class="pz-descripcion" maxlength="300" placeholder="Ej.: Fabricar, pintar, montar"></div>
+    <div class="campo"><label for="pz${n}Materiales">Materiales indispensables para iniciar</label>
+      <textarea id="pz${n}Materiales" class="pz-materiales" placeholder="Uno por línea&#10;Chapa inox 3 mm&#10;Válvula esférica 2&quot;"></textarea>
+      <small>El taller no puede iniciar esta pieza hasta que Compras registre su recepción.</small></div>`;
+  return bloque;
+}
+
+const bloques = () => [...campo('aPiezas').querySelectorAll('.alta-pieza')];
+
+/** Numera las piezas y muestra el ID que va a recibir cada una (mismo número de orden, ítem 01, 02…). */
+function pintarPiezas() {
   const codigo = campo('aCodigo').value.trim().toUpperCase();
   const urgencia = campo('aUrgencia').value;
-  const propio = campo('aId').value.trim().toUpperCase();
-  const destino = campo('aVistaPrevia');
-  if (propio) {
-    destino.innerHTML = `<span>Se va a usar el ID cargado</span><span class="codigo">${esc(propio)}</span>`;
-  } else if (/^[A-Z]{3}$/.test(codigo)) {
-    const id = `${String(siguienteNumero).padStart(4, '0')}-${codigo}-${urgencia}-01`;
-    destino.innerHTML = `<span>ID que se va a generar</span><span class="codigo">${esc(id)}</span>`;
-  } else {
-    destino.innerHTML = '<span>El ID se genera solo: número de orden, código de cliente, urgencia e ítem.</span>';
-  }
+  const valido = /^[A-Z]{3}$/.test(codigo);
+  const lista = bloques();
+  lista.forEach((bloque, i) => {
+    const id = bloque.querySelector('.alta-pieza-id');
+    id.hidden = !valido;
+    id.textContent = valido ? `${String(siguienteNumero).padStart(4, '0')}-${codigo}-${urgencia}-${String(i + 1).padStart(2, '0')}` : '';
+    bloque.querySelector('[data-quitar-pieza]').hidden = lista.length === 1;
+    // Sin ID para mostrar y sin botón de quitar, el renglón de arriba no ocupa lugar.
+    bloque.querySelector('.alta-pieza-cabeza').hidden = !valido && lista.length === 1;
+  });
+}
+
+function agregarPieza({ enfocar = false } = {}) {
+  const bloque = bloquePieza();
+  campo('aPiezas').append(bloque);
+  pintarPiezas();
+  if (enfocar) bloque.querySelector('.pz-nombre').focus();
 }
 
 function pintarClientes() {
@@ -41,11 +76,13 @@ async function actualizar() {
   const proyectos = await api.proyectos();
   siguienteNumero = proyectos.reduce((maximo, p) => Math.max(maximo, p.numero), 0) + 1;
   pintarClientes();
-  pintarVistaPrevia();
+  pintarPiezas();
 }
 
 function reiniciarFormulario() {
   campo('formAlta').reset();
+  campo('aPiezas').replaceChildren();
+  agregarPieza();
   campo('aIngreso').value = ctx.catalogo.hoy;
   campo('aPlazo').value = sumarDias(ctx.catalogo.hoy, 14);
 }
@@ -57,9 +94,9 @@ export default {
     raiz = elemento;
     ctx = contexto;
     raiz.innerHTML = `
-      <div class="rejilla dos">
+      <div class="alta-unica">
         <section class="tarjeta">
-          <div class="tarjeta-cabeza"><h2>Nuevo proyecto</h2></div>
+          <div class="tarjeta-cabeza"><h2>Nuevo pedido</h2></div>
           <div class="tarjeta-cuerpo">
             <form id="formAlta" novalidate autocomplete="off">
               <div class="par">
@@ -70,45 +107,20 @@ export default {
                   <input id="aCodigo" class="mono mayus" maxlength="3" placeholder="MPU">
                   <small>3 letras. Forma parte del ID.</small></div>
               </div>
-              <div class="campo"><label for="aNombre">Nombre del proyecto</label>
-                <input id="aNombre" maxlength="120" placeholder="Ej.: Tanque de acero inoxidable 2000 L"></div>
-              <div class="campo"><label for="aDescripcion">Descripción</label>
-                <input id="aDescripcion" maxlength="300" placeholder="Ej.: Fabricar, pintar, montar"></div>
-              <div class="par">
-                <div class="campo"><label for="aPresupuesto">Nro. de presupuesto</label>
-                  <input id="aPresupuesto" maxlength="40" placeholder="PP - 101060 - MPU"></div>
+              <div class="par tres">
                 <div class="campo"><label for="aUrgencia">Urgencia</label>
                   <select id="aUrgencia"><option value="E">E · Estándar</option><option value="U">U · Urgente</option></select></div>
-              </div>
-              <div class="par">
                 <div class="campo"><label for="aIngreso">Fecha de ingreso</label><input type="date" id="aIngreso"></div>
                 <div class="campo"><label for="aPlazo">Plazo de entrega</label><input type="date" id="aPlazo"></div>
               </div>
-              <div class="campo"><label for="aMateriales">Materiales indispensables para iniciar</label>
-                <textarea id="aMateriales" placeholder="Uno por línea&#10;Chapa inox 3 mm&#10;Válvula esférica 2&quot;"></textarea>
-                <small>El taller no puede iniciar el trabajo hasta que Compras registre su recepción.</small></div>
-              <div class="campo"><label for="aId">ID existente (opcional)</label>
-                <input id="aId" class="mono mayus" maxlength="13" placeholder="Dejar vacío para generarlo">
-                <small>Para otra parte de un pedido ya cargado, usá el ítem siguiente. Ej.: 0643-MPU-U-02</small></div>
-              <label class="casilla"><input type="checkbox" id="aAprobado" checked> Presupuesto aprobado por el cliente</label>
-              <div class="vista-previa-id" id="aVistaPrevia"></div>
+              <div id="aPiezas" class="alta-piezas"></div>
+              <button class="boton secundario alta-mas" type="button" id="aMasPieza"><span class="ico">${icono('mas')}</span>Agregar otra pieza</button>
               <p class="error" id="aError" role="alert"></p>
               <div class="acciones-form">
-                <button class="boton" type="submit">Dar de alta</button>
+                <button class="boton" type="submit">Crear pedido</button>
                 <button class="boton secundario" type="button" id="aLimpiar">Limpiar</button>
               </div>
             </form>
-          </div>
-        </section>
-        <section class="tarjeta">
-          <div class="tarjeta-cabeza"><h2>Qué pasa después</h2></div>
-          <div class="tarjeta-cuerpo">
-            <ol class="pasos">
-              <li><span>El proyecto queda <strong>Pendiente de materiales</strong> y aparece en la pantalla de Compras.</span></li>
-              <li><span>Compras registra la recepción e imprime la <strong>hoja de ruta</strong> con el ID en código de barras.</span></li>
-              <li><span>El taller escanea la hoja para <strong>iniciar, pausar, continuar y finalizar</strong>.</span></li>
-              <li><span>El panel calcula el semáforo contra el plazo que cargaste acá. Los urgentes van primero.</span></li>
-            </ol>
           </div>
         </section>
       </div>`;
@@ -122,16 +134,20 @@ export default {
     campo('aCliente').addEventListener('input', () => {
       const conocido = ctx.catalogo.clientes.find((c) => c.nombre === campo('aCliente').value.trim());
       if (conocido) campo('aCodigo').value = conocido.codigo;
-      pintarVistaPrevia();
+      pintarPiezas();
     });
-    ['aCodigo', 'aUrgencia', 'aId'].forEach((id) => campo(id).addEventListener('input', pintarVistaPrevia));
+    ['aCodigo', 'aUrgencia'].forEach((id) => campo(id).addEventListener('input', pintarPiezas));
+    campo('aMasPieza').addEventListener('click', () => agregarPieza({ enfocar: true }));
+    campo('aPiezas').addEventListener('click', (evento) => {
+      const quitar = evento.target.closest('[data-quitar-pieza]');
+      if (!quitar || bloques().length === 1) return;
+      quitar.closest('.alta-pieza').remove();
+      pintarPiezas();
+    });
     campo('aLimpiar').addEventListener('click', () => {
-      campoFecha(campo('aIngreso'), { hoy: ctx.catalogo.hoy, atajos: [['Hoy', 0], ['Ayer', -1], ['Hace 7 días', -7]] });
-    campo('aPlazo').setAttribute('min', ctx.catalogo.hoy);
-    campoFecha(campo('aPlazo'), { hoy: ctx.catalogo.hoy, atajos: [['+7 días', 7], ['+15 días', 15], ['+30 días', 30], ['+60 días', 60]] });
-    reiniciarFormulario();
+      reiniciarFormulario();
       campo('aError').textContent = '';
-      pintarVistaPrevia();
+      pintarPiezas();
     });
 
     campo('formAlta').addEventListener('submit', async (evento) => {
@@ -145,21 +161,20 @@ export default {
           id_usuario: ctx.usuarioConRol('Gerencia'),
           cliente: campo('aCliente').value,
           codigo_cliente: campo('aCodigo').value,
-          nombre: campo('aNombre').value,
-          descripcion: campo('aDescripcion').value,
-          nro_presupuesto: campo('aPresupuesto').value,
           urgencia: campo('aUrgencia').value,
           fecha_ingreso: campo('aIngreso').value,
           plazo_entrega: campo('aPlazo').value,
-          materiales: campo('aMateriales').value.split('\n'),
-          id: campo('aId').value,
-          aprobado: campo('aAprobado').checked,
+          piezas: bloques().map((b) => ({
+            nombre: b.querySelector('.pz-nombre').value,
+            descripcion: b.querySelector('.pz-descripcion').value,
+            materiales: b.querySelector('.pz-materiales').value.split('\n'),
+          })),
         });
-        avisar(`Proyecto ${creado.id} creado. Queda esperando materiales en Compras.`);
-        campoFecha(campo('aIngreso'), { hoy: ctx.catalogo.hoy, atajos: [['Hoy', 0], ['Ayer', -1], ['Hace 7 días', -7]] });
-    campo('aPlazo').setAttribute('min', ctx.catalogo.hoy);
-    campoFecha(campo('aPlazo'), { hoy: ctx.catalogo.hoy, atajos: [['+7 días', 7], ['+15 días', 15], ['+30 días', 30], ['+60 días', 60]] });
-    reiniciarFormulario();
+        const ids = creado.ids_creados || [creado.id];
+        avisar(ids.length === 1
+          ? `Pedido ${ids[0]} creado. Queda esperando materiales en Compras.`
+          : `Pedido ${String(creado.numero).padStart(4, '0')} creado con ${ids.length} piezas (${ids[0]} a ${ids.at(-1)}). Quedan esperando materiales en Compras.`);
+        reiniciarFormulario();
         await actualizar();
         campo('aCliente').focus();
       } catch (e) {

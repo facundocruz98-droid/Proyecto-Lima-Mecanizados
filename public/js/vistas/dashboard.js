@@ -323,7 +323,7 @@ function iniciar(raiz) {
             const inicio = historial?.eventos.find(evento => evento.tipo === "inicio");
             return {
                 id: texto(fila.id), nombre: texto(fila.nombre), cliente: texto(fila.cliente),
-                urgencia: texto(fila.urgencia), plazo: "", aprob: fila.aprobado ? "Sí" : "No",
+                urgencia: texto(fila.urgencia), plazo: "",
                 estado: estados.find(([nombre]) => normalizar(nombre) === normalizar(fila.estado))?.[0] ?? "",
                 ingreso: diaValido(texto(fila.fecha_ingreso)), fin: diaValido(texto(fila.fecha_fin)),
                 entrega: diaValido(texto(fila.plazo_entrega)), inicio: inicio?.dia ?? "",

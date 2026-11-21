@@ -76,6 +76,8 @@ async function mostrarVista() {
   $('#titulo').textContent = vista.titulo;
   $('#subtitulo').textContent = vista.subtitulo || '';
   $('#subtitulo').hidden = !vista.subtitulo;
+  // Cada pantalla puede ajustar su encabezado con CSS (ej. "Alta de proyecto" lo centra junto al formulario).
+  document.querySelector('.contenido').dataset.vista = ruta;
   document.title = `${vista.titulo} · Seguimiento de Taller`;
 
   // Cada pantalla recibe un marco nuevo: así sus manejadores de eventos no se acumulan.

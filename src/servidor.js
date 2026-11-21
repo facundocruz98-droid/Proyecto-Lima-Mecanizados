@@ -90,13 +90,13 @@ function planillaCSV(filas) {
   const fechaAR = (f) => (f ? f.split('-').reverse().join('/') : '');
   const lineas = [[
     '#', 'FECHA IN', 'PLAZO ENTREGA', 'CLIENTE', 'NOMBRE PROY', 'DESCRIPCION', 'URG',
-    'GEN. ID', 'ID', 'APROB', 'En Ejec', 'Fecha Fin', 'Estado', 'Etapa', 'Motivo de demora',
+    'ID', 'En Ejec', 'Fecha Fin', 'Estado', 'Etapa', 'Motivo de demora',
     'Cantidad de pausas', 'Tiempo total detenido (horas)',
   ]];
   for (const [n, f] of filas.entries()) {
     lineas.push([
       n + 1, fechaAR(f.fecha_ingreso), fechaAR(f.plazo_entrega), f.cliente, f.nombre, f.descripcion,
-      f.urgencia, f.id_generado, f.id, f.aprobado, f.en_ejecucion,
+      f.urgencia, f.id, f.en_ejecucion,
       fechaAR(f.fecha_fin), f.estado, f.etapa, f.motivo_demora,
       f.cantidad_pausas, f.horas_detenido.toFixed(2).replace('.', ','),
     ]);
@@ -111,14 +111,14 @@ function planillaExcel(filas, pausas) {
     columnas: [
       { titulo: '#', ancho: 5 }, { titulo: 'FECHA IN', ancho: 11 }, { titulo: 'PLAZO ENTREGA', ancho: 14 },
       { titulo: 'CLIENTE', ancho: 22 }, { titulo: 'NOMBRE PROY', ancho: 28 }, { titulo: 'DESCRIPCION', ancho: 34 },
-      { titulo: 'URG', ancho: 6 }, { titulo: 'GEN. ID', ancho: 9 }, { titulo: 'ID', ancho: 16 },
-      { titulo: 'APROB', ancho: 8 }, { titulo: 'En Ejec', ancho: 9 }, { titulo: 'Fecha Fin', ancho: 11 },
+      { titulo: 'URG', ancho: 6 }, { titulo: 'ID', ancho: 16 },
+      { titulo: 'En Ejec', ancho: 9 }, { titulo: 'Fecha Fin', ancho: 11 },
       { titulo: 'Estado', ancho: 22 }, { titulo: 'Etapa', ancho: 13 }, { titulo: 'Motivo de demora', ancho: 40 },
       { titulo: 'Cantidad de pausas', ancho: 12 }, { titulo: 'Tiempo total detenido (h:mm)', ancho: 16 },
     ],
     filas: filas.map((f, n) => [
       n + 1, fechaExcel(f.fecha_ingreso), fechaExcel(f.plazo_entrega), f.cliente, f.nombre, f.descripcion,
-      f.urgencia, f.id_generado, f.id, f.aprobado, f.en_ejecucion, fechaExcel(f.fecha_fin),
+      f.urgencia, f.id, f.en_ejecucion, fechaExcel(f.fecha_fin),
       f.estado, f.etapa, f.motivo_demora, f.cantidad_pausas, duracionExcel(f.horas_detenido),
     ]),
   };
@@ -196,7 +196,7 @@ function crearServidor({ rutaBase, ahora } = {}) {
     pausar: servicios.pausar,
     continuar: servicios.continuar,
     finalizar: servicios.finalizar,
-    etapa: servicios.cambiarEtapa,
+    'agregar-pieza': servicios.agregarPieza,
     'completar-etapa': servicios.completarEtapa,
     'iniciar-etapa': servicios.iniciarEtapa,
     reprogramar: servicios.reprogramar,

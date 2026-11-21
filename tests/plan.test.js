@@ -207,8 +207,27 @@ test('los pedidos anteriores sin plan siguen operando con el flujo de siempre', 
   const { s } = preparar();
   const enCurso = s.listarProyectos().find((p) => p.estado === 'en_proceso');
   assert.equal(enCurso.tiene_plan, false);
-  s.cambiarEtapa(enCurso.id, { id_usuario: OPERARIO, etapa: 'Pintura' });
+  assert.equal(s.cambiarEtapa, undefined, 'ya no se puede cambiar de etapa libremente');
   const p = s.finalizar(enCurso.id, { id_usuario: OPERARIO });
   assert.equal(p.estado, 'finalizado');
   assert.throws(() => s.completarEtapa(enCurso.id, { id_usuario: OPERARIO }), /no tiene plan/);
+});
+
+test('crear pedido con varias piezas: mismo número, ítems 01, 02, 03 en una sola operación', () => {
+  const { s } = preparar();
+  const base = { id_usuario: GERENCIA, cliente: 'Minera Puna', codigo_cliente: 'MIN', urgencia: 'U', plazo_entrega: '2026-11-30' };
+  const r = s.crearProyecto({ ...base, piezas: [
+    { nombre: 'Tanque 2000 L', materiales: ['Chapa inox'] },
+    { nombre: 'Tapa', descripcion: 'Con bisagra', materiales: ['Chapa 3 mm'] },
+    { nombre: 'Escalera', materiales: ['Planchuela'] },
+  ] });
+  assert.deepEqual(r.ids_creados, ['0645-MIN-U-01', '0645-MIN-U-02', '0645-MIN-U-03']);
+  assert.deepEqual(r.piezas_del_pedido.map((p) => p.nombre), ['Tanque 2000 L', 'Tapa', 'Escalera']);
+  assert.equal(s.obtenerProyecto('0645-MIN-U-02').descripcion, 'Con bisagra');
+  assert.equal(s.obtenerProyecto('0645-MIN-U-03').plazo_entrega, '2026-11-30');
+  // Si una pieza tiene un error, no se guarda ninguna.
+  const antes = s.listarProyectos().length;
+  assert.throws(() => s.crearProyecto({ ...base, piezas: [{ nombre: 'Ok', materiales: ['A'] }, { nombre: 'Sin materiales', materiales: [] }] }),
+    /Pieza 2: Indicá al menos un material/);
+  assert.equal(s.listarProyectos().length, antes);
 });

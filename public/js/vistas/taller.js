@@ -49,14 +49,11 @@ function formularioPlan() {
       </div>` : '';
   const lista = plan.length
     ? `<ol class="plan-lista">${plan.map((nombre, i) => `
-        <li>
+        <li data-i="${i}" tabindex="0" title="Arrastrá para cambiar el orden" aria-label="${i + 1}. ${esc(nombre)}. Para moverla, arrastrala o usá Alt y las flechas.">
+          <span class="plan-agarre" aria-hidden="true">${icono('agarrar')}</span>
           <span class="plan-num">${i + 1}</span>
           <span class="plan-nombre">${esc(nombre)}</span>
-          <span class="plan-mover">
-            <button type="button" class="plan-icono" data-subir="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Subir ${esc(nombre)}" title="Subir">${icono('arriba')}</button>
-            <button type="button" class="plan-icono" data-bajar="${i}" ${i === plan.length - 1 ? 'disabled' : ''} aria-label="Bajar ${esc(nombre)}" title="Bajar">${icono('abajo')}</button>
-            <button type="button" class="plan-icono quitar" data-quitar="${i}" aria-label="Quitar ${esc(nombre)}" title="Quitar">${icono('cerrar')}</button>
-          </span>
+          <button type="button" class="plan-icono quitar" data-quitar="${i}" aria-label="Quitar ${esc(nombre)}" title="Quitar">${icono('cerrar')}</button>
         </li>`).join('')}</ol>`
     : `<p class="plan-vacio">Todavía no hay etapas. ${sugerencias.length ? 'Elegí una sugerida o escribí' : 'Escribí'} la primera.</p>`;
   return `
@@ -125,31 +122,141 @@ function conectarPlan() {
   form.addEventListener('click', (evento) => {
     const boton = evento.target.closest('button');
     if (!boton || boton.disabled) return;
-    const { sugerencia, subir, bajar, quitar } = boton.dataset;
+    const { sugerencia, quitar } = boton.dataset;
     if (sugerencia !== undefined) {
       const i = plan.findIndex((e) => igual(e, sugerencia));
       if (i >= 0) plan.splice(i, 1); else agregarEtapa(sugerencia);
-    } else if (subir !== undefined) {
-      const i = Number(subir);
-      [plan[i - 1], plan[i]] = [plan[i], plan[i - 1]];
-    } else if (bajar !== undefined) {
-      const i = Number(bajar);
-      [plan[i + 1], plan[i]] = [plan[i], plan[i + 1]];
     } else if (quitar !== undefined) {
       plan.splice(Number(quitar), 1);
     } else {
       return;
     }
     repintarPlan();
-    // Después de mover, el foco sigue a la etapa que se movió (cómodo para seguir moviéndola con teclado).
-    if (subir !== undefined || bajar !== undefined) {
-      const nueva = subir !== undefined ? Number(subir) - 1 : Number(bajar) + 1;
-      const fila = el('formPlan').querySelectorAll('.plan-lista li')[nueva];
-      const preferido = fila?.querySelector(subir !== undefined ? '[data-subir]' : '[data-bajar]');
-      (preferido && !preferido.disabled ? preferido : fila?.querySelector('button:not([disabled])'))?.focus();
-    }
   });
+  conectarArrastre(form);
   form.addEventListener('submit', confirmarPlan);
+}
+
+/**
+ * Cambiar el orden arrastrando cada etapa con el mouse (o el dedo) y soltándola donde se quiera.
+ * Con el teclado: Alt + flecha arriba/abajo sobre la etapa seleccionada.
+ */
+function conectarArrastre(form) {
+  const lista = form.querySelector('.plan-lista');
+  if (!lista) return;
+  const guardarOrden = (enfocar) => {
+    const anterior = [...plan];
+    plan = [...lista.children].map((li) => anterior[Number(li.dataset.i)]);
+    repintarPlan();
+    if (enfocar !== undefined) el('formPlan').querySelectorAll('.plan-lista li')[enfocar]?.focus();
+  };
+
+  // Arrastre "profesional": la etapa agarrada sigue al puntero, las demás se corren con animación
+  // para hacerle lugar y, al soltar, se desliza hasta su lugar. Arranca después de mover unos píxeles.
+  lista.addEventListener('pointerdown', (evento) => {
+    const fila = evento.target.closest('li');
+    if (!fila || evento.target.closest('button') || evento.button !== 0 || lista.classList.contains('soltando')) return;
+    evento.preventDefault();
+    fila.focus({ preventScroll: true });
+    const puntero = evento.pointerId;
+    const filas = [...lista.children];
+    const desde = filas.indexOf(fila);
+    const cajas = filas.map((f) => f.getBoundingClientRect());
+    const separacion = cajas.length > 1 ? cajas[1].top - cajas[0].bottom : 0;
+    const paso = cajas[desde].height + separacion; // lo que se corren las demás para hacerle lugar
+    const yInicial = evento.clientY;
+    const minimo = cajas[0].top - cajas[desde].top;
+    const maximo = cajas[cajas.length - 1].bottom - cajas[desde].bottom;
+    let arrastrando = false;
+    let hasta = desde;
+
+    const desplazamientoFinal = () => {
+      let d = 0;
+      if (hasta > desde) for (let k = desde + 1; k <= hasta; k += 1) d += cajas[k].height + separacion;
+      if (hasta < desde) for (let k = hasta; k < desde; k += 1) d -= cajas[k].height + separacion;
+      return d;
+    };
+    const pintarLugares = () => {
+      filas.forEach((f, k) => {
+        if (f === fila) return;
+        let d = 0;
+        if (desde < hasta && k > desde && k <= hasta) d = -paso;
+        if (hasta < desde && k >= hasta && k < desde) d = paso;
+        f.style.transform = d ? `translateY(${d}px)` : '';
+      });
+      // Numeración en vivo según el lugar donde caería cada etapa.
+      const orden = filas.filter((f) => f !== fila);
+      orden.splice(hasta, 0, fila);
+      orden.forEach((f, k) => { f.querySelector('.plan-num').textContent = k + 1; });
+    };
+
+    const mover = (e) => {
+      if (e.pointerId !== puntero) return;
+      const dy = Math.min(maximo, Math.max(minimo, e.clientY - yInicial));
+      if (!arrastrando) {
+        if (Math.abs(e.clientY - yInicial) < 4) return;
+        arrastrando = true;
+        lista.classList.add('ordenando');
+        fila.classList.add('arrastrando');
+      }
+      fila.style.transform = `translateY(${dy}px) scale(1.02)`;
+      // Nuevo lugar (como en las listas de hoy): al bajar, pasa a una etapa cuando su borde de abajo cruza
+      // la mitad de esa etapa; al subir, cuando su borde de arriba la cruza.
+      const arriba = cajas[desde].top + dy;
+      const abajo = cajas[desde].bottom + dy;
+      hasta = cajas.reduce((n, c, k) => {
+        if (k === desde) return n;
+        const mitad = c.top + c.height / 2;
+        return (k < desde ? arriba > mitad : abajo > mitad) ? n + 1 : n;
+      }, 0);
+      pintarLugares();
+    };
+
+    const terminar = () => {
+      lista.classList.remove('ordenando', 'soltando');
+      filas.forEach((f) => { f.style.transform = ''; f.classList.remove('arrastrando', 'aterrizando'); });
+      if (hasta !== desde) {
+        const anterior = [...plan];
+        const nuevo = anterior.filter((_, k) => k !== desde);
+        nuevo.splice(hasta, 0, anterior[desde]);
+        plan = nuevo;
+        repintarPlan();
+        el('formPlan').querySelectorAll('.plan-lista li')[hasta]?.focus({ preventScroll: true });
+      }
+    };
+
+    const soltar = (e) => {
+      if (e.pointerId !== puntero) return;
+      window.removeEventListener('pointermove', mover);
+      window.removeEventListener('pointerup', soltar);
+      window.removeEventListener('pointercancel', soltar);
+      if (!arrastrando) return;
+      // Se desliza hasta su lugar y recién ahí se guarda el orden (sin saltos).
+      lista.classList.add('soltando');
+      fila.classList.add('aterrizando');
+      fila.style.transform = `translateY(${desplazamientoFinal()}px)`;
+      let listo = false;
+      const cerrar = () => { if (!listo) { listo = true; terminar(); } };
+      fila.addEventListener('transitionend', cerrar, { once: true });
+      setTimeout(cerrar, 260); // por si el navegador no anima (ej. movimiento reducido)
+    };
+
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', soltar);
+    window.addEventListener('pointercancel', soltar);
+  });
+
+  lista.addEventListener('keydown', (evento) => {
+    const fila = evento.target.closest('li');
+    if (!fila || evento.target !== fila || !evento.altKey || !['ArrowUp', 'ArrowDown'].includes(evento.key)) return;
+    evento.preventDefault();
+    const filas = [...lista.children];
+    const i = filas.indexOf(fila);
+    const j = evento.key === 'ArrowUp' ? i - 1 : i + 1;
+    if (j < 0 || j >= filas.length) return;
+    lista.insertBefore(fila, evento.key === 'ArrowUp' ? filas[j] : filas[j].nextElementSibling);
+    guardarOrden(j);
+  });
 }
 
 async function abrirPlan() {
@@ -274,10 +381,6 @@ function cuerpoTrabajo(p) {
 
   // Pedido sin plan: listo para iniciar (abre el plan) o pedido anterior con el flujo de etapas fijas
   if (p.estado === 'finalizado') return '<p class="exito">Este trabajo ya está finalizado.</p>';
-  const selectorEtapas = p.estado === 'en_proceso'
-    ? `<p class="seccion-titulo">Etapa actual</p>
-       <div class="etapas">${ctx.catalogo.etapas.map((e) => `<button class="etapa" type="button" data-etapa="${esc(e)}" aria-pressed="${p.etapa_actual === e}">${esc(e)}</button>`).join('')}</div>`
-    : '';
   const listo = p.estado === 'listo' && p.listo_desde
     ? `<p class="nota" style="margin-top:14px">Materiales confirmados el ${fechaHora(p.listo_desde)}. Al tocar <strong>Iniciar</strong> se arma el plan de fabricación.</p>`
     : '';
@@ -287,7 +390,7 @@ function cuerpoTrabajo(p) {
       ${boton('pausar', 'Pausar', 'pausar', 'pausa', p.estado === 'en_proceso')}
       ${boton('continuar', 'Continuar', 'continuar', 'play', p.estado === 'pausado')}
       ${boton('finalizar', 'Finalizar', 'finalizar', 'check', p.estado === 'en_proceso')}
-    </div>${selectorEtapas}`;
+    </div>`;
 }
 
 function pintarTrabajo() {
@@ -407,18 +510,6 @@ async function guardarPausa(evento) {
   enfocarEscaner();
 }
 
-async function cambiarEtapa(etapa) {
-  try {
-    actual = await api.cambiarEtapa(actual.id, { id_usuario: operario(), etapa });
-    mensaje = `Etapa actualizada: ${etapa}.`;
-  } catch (e) {
-    mensaje = '';
-    el('codigoError').textContent = e.message;
-  }
-  pintarTrabajo();
-  enfocarEscaner();
-}
-
 /** Lo que importa para saber si otra PC cambió el pedido que está en pantalla. */
 const firma = (p) => JSON.stringify([p.estado, p.etapa_actual, p.plazo_entrega, p.material_recibido_tras_pausa,
   p.plan.map((e) => e.estado)]);
@@ -489,9 +580,7 @@ export default {
       const ficha = evento.target.closest('[data-ficha]');
       if (ficha) { buscar(ficha.dataset.ficha); return; }
       const accion = evento.target.closest('[data-accion]');
-      if (accion && !accion.disabled) { ejecutar(accion.dataset.accion); return; }
-      const etapa = evento.target.closest('[data-etapa]');
-      if (etapa && actual) cambiarEtapa(etapa.dataset.etapa);
+      if (accion && !accion.disabled) ejecutar(accion.dataset.accion);
     });
 
     await actualizar();

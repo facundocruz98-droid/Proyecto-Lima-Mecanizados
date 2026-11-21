@@ -7,10 +7,7 @@ const ESTADO = { completada: 'completada', en_curso: 'en curso', lista: 'próxim
 
 /** Plan de fabricación en la hoja: se define en el Puesto de taller al iniciar el pedido. */
 function planHoja(p) {
-  if (!p.tiene_plan) {
-    if (p.estado === 'listo') return '<p class="hoja-plan-vacio">Plan de fabricación: se define en el Puesto de taller al tocar "Iniciar".</p>';
-    return '';
-  }
+  if (!p.tiene_plan) return '';
   return `
     <section class="hoja-plan">
       <h4>Plan de fabricación · ${p.etapas_completadas} de ${p.total_etapas} etapas completadas</h4>
@@ -34,7 +31,6 @@ export function hojaDeRutaHTML(p) {
         <dt>Proyecto</dt><dd>${esc(p.nombre)}</dd>
         <dt>Descripción</dt><dd>${esc(p.descripcion || '—')}</dd>
         <dt>Cliente</dt><dd>${esc(p.cliente)}</dd>
-        <dt>Presupuesto</dt><dd>${esc(p.nro_presupuesto || '—')}</dd>
         <dt>Plazo de entrega</dt><dd><strong>${fecha(p.plazo_entrega)}</strong></dd>
         <dt>Materiales</dt><dd>${indispensables || '—'}</dd>
         <dt>Emitida</dt><dd>${emision ? fechaHora(emision.fecha_hora) : '—'}</dd>

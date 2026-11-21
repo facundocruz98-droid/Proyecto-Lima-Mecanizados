@@ -33,6 +33,8 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     proyecto: db.prepare(`${SQL_PROYECTO} WHERE p.id = ?`),
     existeProyecto: db.prepare('SELECT 1 AS si FROM proyecto WHERE id = ?'),
     maxNumero: db.prepare('SELECT COALESCE(MAX(numero), 0) AS n FROM proyecto'),
+    maxItem: db.prepare('SELECT COALESCE(MAX(item), 0) AS n FROM proyecto WHERE numero = ?'),
+    piezasDelNumero: db.prepare('SELECT id, item, nombre, estado FROM proyecto WHERE numero = ? ORDER BY item'),
     insertarProyecto: db.prepare(`INSERT INTO proyecto
       (id, numero, item, fecha_ingreso, plazo_entrega, id_cliente, nombre, descripcion,
        nro_presupuesto, urgencia, aprobado, estado, etapa_actual)
@@ -154,9 +156,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       codigo_cliente: p.codigo_cliente,
       nombre: p.nombre,
       descripcion: p.descripcion,
-      nro_presupuesto: p.nro_presupuesto,
       urgencia: p.urgencia,
-      aprobado: Boolean(p.aprobado),
       estado: p.estado,
       estado_texto: reglas.ESTADOS[p.estado],
       etapa_actual: p.etapa_actual,
@@ -357,6 +357,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       })),
       eventos,
       tiempos: calcularTiempos(eventos),
+      piezas_del_pedido: piezasDelPedido(p.numero),
     };
   }
 
@@ -420,9 +421,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       nombre: p.nombre,
       descripcion: p.descripcion,
       urgencia: p.urgencia,
-      id_generado: true,
       id: p.id,
-      aprobado: p.aprobado,
       en_ejecucion: p.en_ejecucion,
       fecha_fin: p.fecha_fin ? reglas.fechaLocal(new Date(p.fecha_fin)) : '',
       estado: p.estado_texto,
@@ -465,7 +464,6 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
         nombre: p.nombre,
         cliente: p.cliente,
         urgencia: p.urgencia,
-        aprobado: p.aprobado,
         estado: p.estado_texto,
         etapa: p.etapa_actual,
         fecha_ingreso: p.fecha_ingreso,
@@ -567,73 +565,104 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     return { ...resumen, guardado: true };
   }
 
-  function crearProyecto(datos = {}) {
-    const usuario = exigirRol(datos.id_usuario, ['Gerencia'], 'dar de alta un proyecto');
-    const cliente = texto(datos.cliente);
-    const codigo = texto(datos.codigo_cliente).toUpperCase();
-    const nombre = texto(datos.nombre);
-    const descripcion = texto(datos.descripcion);
-    const presupuesto = texto(datos.nro_presupuesto);
-    const urgencia = texto(datos.urgencia).toUpperCase() || 'E';
-    const plazo = texto(datos.plazo_entrega);
-    const ingreso = texto(datos.fecha_ingreso) || hoy();
-    const idIngresado = texto(datos.id).toUpperCase();
-    const materiales = (Array.isArray(datos.materiales) ? datos.materiales : [])
-      .map(texto).filter(Boolean);
-
-    if (cliente.length < 2) throw new ErrorNegocio('Completá el nombre del cliente.');
-    if (!/^[A-Z]{3}$/.test(codigo)) throw new ErrorNegocio('El código de cliente tiene que ser de 3 letras (ej. MPU).');
-    if (!nombre) throw new ErrorNegocio('Completá el nombre del proyecto.');
-    if (!['E', 'U'].includes(urgencia)) throw new ErrorNegocio('La urgencia tiene que ser E (estándar) o U (urgente).');
-    if (!plazo) throw new ErrorNegocio('El plazo de entrega es obligatorio: es la referencia de las alertas.');
-    if (!reglas.esFechaValida(plazo)) throw new ErrorNegocio('El plazo de entrega no es una fecha válida.');
-    if (plazo < hoy()) throw new ErrorNegocio('El plazo de entrega no puede ser anterior a hoy.');
-    if (!reglas.esFechaValida(ingreso)) throw new ErrorNegocio('La fecha de ingreso no es una fecha válida.');
-    if (ingreso > plazo) throw new ErrorNegocio('La fecha de ingreso no puede ser posterior al plazo de entrega.');
-    if (materiales.length === 0) throw new ErrorNegocio('Indicá al menos un material indispensable para iniciar.');
-    if (cliente.length > 80 || nombre.length > 120 || descripcion.length > 300 || presupuesto.length > 40
-        || materiales.some((m) => m.length > 120) || materiales.length > 30) {
+  /** Valida los datos de una pieza (lo que se carga tanto al crear un pedido como al agregarle una pieza). */
+  function validarPieza(datos, { urgenciaPorDefecto = 'E', que = 'del proyecto' } = {}) {
+    const pieza = {
+      nombre: texto(datos.nombre),
+      descripcion: texto(datos.descripcion),
+      urgencia: texto(datos.urgencia).toUpperCase() || urgenciaPorDefecto,
+      plazo: texto(datos.plazo_entrega),
+      ingreso: texto(datos.fecha_ingreso) || hoy(),
+      materiales: (Array.isArray(datos.materiales) ? datos.materiales : []).map(texto).filter(Boolean),
+    };
+    if (!pieza.nombre) throw new ErrorNegocio(`Completá el nombre ${que}.`);
+    if (!['E', 'U'].includes(pieza.urgencia)) throw new ErrorNegocio('La urgencia tiene que ser E (estándar) o U (urgente).');
+    if (!pieza.plazo) throw new ErrorNegocio('El plazo de entrega es obligatorio: es la referencia de las alertas.');
+    if (!reglas.esFechaValida(pieza.plazo)) throw new ErrorNegocio('El plazo de entrega no es una fecha válida.');
+    if (pieza.plazo < hoy()) throw new ErrorNegocio('El plazo de entrega no puede ser anterior a hoy.');
+    if (!reglas.esFechaValida(pieza.ingreso)) throw new ErrorNegocio('La fecha de ingreso no es una fecha válida.');
+    if (pieza.ingreso > pieza.plazo) throw new ErrorNegocio('La fecha de ingreso no puede ser posterior al plazo de entrega.');
+    if (pieza.materiales.length === 0) throw new ErrorNegocio('Indicá al menos un material indispensable para iniciar.');
+    if (pieza.nombre.length > 120 || pieza.descripcion.length > 300
+        || pieza.materiales.some((m) => m.length > 120) || pieza.materiales.length > 30) {
       throw new ErrorNegocio('Alguno de los textos es demasiado largo.');
     }
+    return pieza;
+  }
+
+  function insertarPieza(id, numero, item, idCliente, pieza, idUsuario, detalleAlta = null) {
+    q.insertarProyecto.run(id, numero, item, pieza.ingreso, pieza.plazo, idCliente, pieza.nombre, pieza.descripcion,
+      '', pieza.urgencia, 1);
+    for (const m of pieza.materiales) q.insertarMaterial.run(id, m, 1, 0, null);
+    registrarEvento(id, 'alta', idUsuario, { detalle: detalleAlta });
+    return obtenerProyecto(id);
+  }
+
+  /**
+   * "Crear pedido": el sistema genera un número de orden nuevo. El pedido puede traer varias piezas
+   * (lista "piezas"): todas comparten número, cliente, urgencia y fechas, y reciben los ítems
+   * 01, 02, 03… en una sola operación (si una pieza tiene un error, no se guarda ninguna).
+   * Sin "piezas" se toma una sola pieza con los campos sueltos (nombre, descripcion, materiales).
+   */
+  function crearProyecto(datos = {}) {
+    const usuario = exigirRol(datos.id_usuario, ['Gerencia'], 'crear un pedido');
+    const cliente = texto(datos.cliente);
+    const codigo = texto(datos.codigo_cliente).toUpperCase();
+    if (cliente.length < 2) throw new ErrorNegocio('Completá el nombre del cliente.');
+    if (cliente.length > 80) throw new ErrorNegocio('El nombre del cliente es demasiado largo.');
+    if (!/^[A-Z]{3}$/.test(codigo)) throw new ErrorNegocio('El código de cliente tiene que ser de 3 letras (ej. MPU).');
+    const lista = Array.isArray(datos.piezas) && datos.piezas.length ? datos.piezas : [datos];
+    if (lista.length > 99) throw new ErrorNegocio('Un pedido puede tener hasta 99 piezas.');
+    const piezas = lista.map((pieza, i) => {
+      try {
+        return validarPieza({ ...datos, nombre: pieza.nombre, descripcion: pieza.descripcion, materiales: pieza.materiales },
+          { que: lista.length > 1 ? 'de la pieza' : 'del proyecto' });
+      } catch (error) {
+        if (lista.length > 1 && error instanceof ErrorNegocio) throw new ErrorNegocio(`Pieza ${i + 1}: ${error.message}`, error.estado);
+        throw error;
+      }
+    });
 
     return transaccion(db, () => {
-      let numero;
-      let item;
-      let id;
-      if (idIngresado) {
-        const partes = reglas.desarmarId(idIngresado);
-        if (!partes) {
-          throw new ErrorNegocio('El ID no tiene el formato correcto. Ejemplo: 0645-MPU-U-01 (número-cliente-urgencia-ítem).');
-        }
-        if (partes.codigoCliente !== codigo) {
-          throw new ErrorNegocio(`El ID dice cliente ${partes.codigoCliente}, pero el código de cliente cargado es ${codigo}.`);
-        }
-        if (partes.urgencia !== urgencia) {
-          throw new ErrorNegocio(`El ID dice urgencia ${partes.urgencia}, pero la urgencia elegida es ${urgencia}.`);
-        }
-        ({ numero, item } = partes);
-        id = idIngresado;
-      } else {
-        numero = q.maxNumero.get().n + 1;
-        item = 1;
-        id = reglas.armarId(numero, codigo, urgencia, item);
-      }
-      if (q.existeProyecto.get(id)) {
-        throw new ErrorNegocio(`El ID ${id} ya existe. Si es otra parte del mismo pedido, usá el ítem siguiente (ej. -02).`, 409);
-      }
-
+      const numero = q.maxNumero.get().n + 1;
       let filaCliente = q.clientePorCodigo.get(codigo);
       if (!filaCliente) {
         const alta = q.insertarCliente.run(cliente, codigo);
         filaCliente = { id: Number(alta.lastInsertRowid) };
       }
-
-      q.insertarProyecto.run(id, numero, item, ingreso, plazo, filaCliente.id, nombre, descripcion,
-        presupuesto, urgencia, datos.aprobado === false ? 0 : 1);
-      for (const m of materiales) q.insertarMaterial.run(id, m, 1, 0, null);
-      registrarEvento(id, 'alta', usuario.id);
-      return obtenerProyecto(id);
+      const ids = piezas.map((pieza, i) => {
+        const id = reglas.armarId(numero, codigo, pieza.urgencia, i + 1);
+        if (q.existeProyecto.get(id)) throw new ErrorNegocio(`El ID ${id} ya existe.`, 409);
+        insertarPieza(id, numero, i + 1, filaCliente.id, pieza, usuario.id);
+        return id;
+      });
+      return { ...obtenerProyecto(ids[0]), ids_creados: ids };
     });
+  }
+
+  /**
+   * "Agregar pieza" a un pedido existente: conserva el número de orden y el cliente,
+   * y usa el siguiente ítem libre de ese número (ej. 0645-FRN-E-01 → 0645-FRN-E-02).
+   * Los códigos ya emitidos no cambian.
+   */
+  function agregarPieza(idPedido, datos = {}) {
+    const usuario = exigirRol(datos.id_usuario, ['Gerencia'], 'agregar piezas a un pedido');
+    const base = buscarProyecto(idPedido);
+    if (base.estado === 'cancelado') throw new ErrorNegocio('El pedido está cancelado: no se le pueden agregar piezas.', 409);
+    const pieza = validarPieza(datos, { urgenciaPorDefecto: base.urgencia, que: 'de la pieza' });
+    return transaccion(db, () => {
+      const item = q.maxItem.get(base.numero).n + 1;
+      if (item > 99) throw new ErrorNegocio('El pedido ya tiene 99 piezas: no se pueden agregar más.', 409);
+      const id = reglas.armarId(base.numero, base.codigo_cliente, pieza.urgencia, item);
+      if (q.existeProyecto.get(id)) throw new ErrorNegocio(`El ID ${id} ya existe.`, 409);
+      return insertarPieza(id, base.numero, item, base.id_cliente, pieza, usuario.id,
+        `Pieza agregada al pedido ${String(base.numero).padStart(4, '0')} (desde ${base.id})`);
+    });
+  }
+
+  /** Piezas del mismo pedido (mismo número de orden), para mostrarlas en el detalle. */
+  function piezasDelPedido(numero) {
+    return q.piezasDelNumero.all(numero).map((p) => ({ id: p.id, item: p.item, nombre: p.nombre, estado: p.estado }));
   }
 
   function reprogramar(id, datos = {}) {
@@ -852,23 +881,6 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     });
   }
 
-  function cambiarEtapa(id, datos = {}) {
-    const usuario = exigirRol(datos.id_usuario, ROLES_TALLER, 'registrar avances del taller');
-    const p = buscarProyecto(id);
-    const etapa = texto(datos.etapa);
-    if (p.estado !== 'en_proceso') throw new ErrorNegocio('La etapa solo se puede cambiar con el trabajo en proceso.', 409);
-    if (q.etapasPedido.all(p.id).length) {
-      throw new ErrorNegocio('Este pedido tiene plan de fabricación: usá "Completar etapa" e "Iniciar etapa".', 409);
-    }
-    if (!reglas.ETAPAS.includes(etapa)) throw new ErrorNegocio('La etapa elegida no existe.');
-    if (etapa === p.etapa_actual) return obtenerProyecto(p.id);
-    return transaccion(db, () => {
-      q.etapa.run(etapa, p.id);
-      registrarEvento(p.id, 'etapa', usuario.id, { etapa });
-      return obtenerProyecto(p.id);
-    });
-  }
-
   // ---------- Demostración ----------
   function restablecerDemo() {
     cargarDatosDeEjemplo(db, ahora());
@@ -881,8 +893,8 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
 
   return {
     catalogo, listarProyectos, obtenerProyecto, seguimientoCliente, alertas, indicadores, planilla, historialPausas, datosDashboard,
-    crearProyecto, importarPlanilla, reprogramar, registrarRecepcion, registrarRecepcionParcial,
-    iniciar, pausar, continuar, finalizar, cambiarEtapa, completarEtapa, iniciarEtapa, catalogoEtapas,
+    crearProyecto, agregarPieza, importarPlanilla, reprogramar, registrarRecepcion, registrarRecepcionParcial,
+    iniciar, pausar, continuar, finalizar, completarEtapa, iniciarEtapa, catalogoEtapas,
     restablecerDemo, inicializarSiEstaVacia,
   };
 }

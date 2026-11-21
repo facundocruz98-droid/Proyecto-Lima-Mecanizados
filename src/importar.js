@@ -241,8 +241,8 @@ function analizarLibro(libro, { existentes, clientes, ahora }) {
     nuevos.push({
       id, numero: partes.numero, item: partes.item, urgencia: partes.urgencia,
       fecha_ingreso: f.ingreso, plazo_entrega: f.plazo, codigo_cliente: codigo,
-      nombre: f.nombre, descripcion: f.descripcion, nro_presupuesto: f.presupuesto,
-      aprobado: leerSiNo(celda('aprobado')),
+      nombre: f.nombre, descripcion: f.descripcion, nro_presupuesto: '',
+      aprobado: true, // la columna APROB del Excel ya no se usa
       estado: historial.estado, etapa_actual: historial.estado === 'pendiente_mat' || historial.estado === 'listo' ? '' : historial.etapa,
       eventos: historial.eventos.map((e) => ({ ...e, fecha_hora: new Date(e.instante).toISOString(), rol: ROL_DEL_EVENTO[e.tipo] })),
     });

@@ -33,6 +33,7 @@ export const api = {
   dashboard: () => pedir('GET', '/api/dashboard'),
 
   crearProyecto: (datos) => pedir('POST', '/api/proyectos', datos),
+  agregarPieza: (id, datos) => pedir('POST', ruta(id, 'agregar-pieza'), datos),
   reprogramar: (id, datos) => pedir('POST', ruta(id, 'reprogramar'), datos),
   recepcion: (id, datos) => pedir('POST', ruta(id, 'recepcion'), datos),
   recepcionParcial: (id, datos) => pedir('POST', ruta(id, 'recepcion-parcial'), datos),
@@ -40,7 +41,6 @@ export const api = {
   pausar: (id, datos) => pedir('POST', ruta(id, 'pausar'), datos),
   continuar: (id, datos) => pedir('POST', ruta(id, 'continuar'), datos),
   finalizar: (id, datos) => pedir('POST', ruta(id, 'finalizar'), datos),
-  cambiarEtapa: (id, datos) => pedir('POST', ruta(id, 'etapa'), datos),
   completarEtapa: (id, datos) => pedir('POST', ruta(id, 'completar-etapa'), datos),
   iniciarEtapa: (id, datos) => pedir('POST', ruta(id, 'iniciar-etapa'), datos),
   catalogoEtapas: () => pedir('GET', '/api/etapas'),

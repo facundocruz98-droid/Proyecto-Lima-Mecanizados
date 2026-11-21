@@ -92,20 +92,14 @@ test('alta: valida los datos obligatorios', async () => {
   }
 });
 
-test('alta: el ID tiene que ser único, bien formado y coherente', async () => {
-  let r = await pedir('POST', '/api/proyectos', nuevoProyecto({ id: '0643-MPU-U-01', codigo_cliente: 'MPU', urgencia: 'U' }));
-  assert.equal(r.estado, 409);
-  assert.match(r.datos.error, /ya existe/);
-
-  r = await pedir('POST', '/api/proyectos', nuevoProyecto({ id: '643-PRU' }));
-  assert.equal(r.estado, 400);
-  assert.match(r.datos.error, /formato/);
-
-  r = await pedir('POST', '/api/proyectos', nuevoProyecto({ id: '0700-ABC-E-01' }));
-  assert.match(r.datos.error, /cliente ABC/);
-
-  r = await pedir('POST', '/api/proyectos', nuevoProyecto({ id: '0700-PRU-U-01' }));
-  assert.match(r.datos.error, /urgencia U/);
+test('crear pedido: siempre genera un número de orden nuevo con el ítem 01', async () => {
+  // Aunque llegue un ID escrito a mano, se ignora: el número lo genera el sistema.
+  const r = await pedir('POST', '/api/proyectos', nuevoProyecto({ id: '0643-MPU-U-01', nombre: 'Pedido de prueba' }));
+  assert.equal(r.estado, 201);
+  assert.equal(r.datos.id, '0645-PRU-E-01');
+  assert.equal(r.datos.item, 1);
+  // Lo dejamos como estaba para no alterar las pruebas siguientes.
+  await pedir('POST', '/api/demo/restablecer');
 });
 
 test('ciclo completo de un proyecto: alta → recepción → inicio → pausa → llegada → continuar → finalizar', async () => {
@@ -115,6 +109,7 @@ test('ciclo completo de un proyecto: alta → recepción → inicio → pausa �
   const id = r.datos.id;
   assert.equal(id, '0645-PRU-E-01');
   assert.equal(r.datos.estado, 'pendiente_mat');
+  assert.ok(!('nro_presupuesto' in r.datos), 'el Nro. de presupuesto ya no se usa en ningún lado');
 
   // Sin materiales no se puede iniciar.
   r = await pedir('POST', `/api/proyectos/${id}/iniciar`, { id_usuario: OPERARIO });
@@ -130,19 +125,20 @@ test('ciclo completo de un proyecto: alta → recepción → inicio → pausa �
   r = await pedir('POST', `/api/proyectos/${id}/recepcion`, { id_usuario: COMPRAS });
   assert.equal(r.estado, 400, 'no se puede recibir dos veces');
 
-  // Inicio: la planilla pasa a En Ejec = TRUE.
-  r = await pedir('POST', `/api/proyectos/${id}/iniciar`, { id_usuario: OPERARIO });
+  // Inicio con plan de fabricación: la planilla pasa a En Ejec = TRUE.
+  r = await pedir('POST', `/api/proyectos/${id}/iniciar`, { id_usuario: OPERARIO, plan: ['Corte', 'Soldadura'] });
   assert.equal(r.datos.estado, 'en_proceso');
   assert.equal(r.datos.etapa_actual, 'Corte');
   let fila = (await pedir('GET', '/api/planilla')).datos.find((f) => f.id === id);
   assert.equal(fila.en_ejecucion, true);
   assert.equal(fila.fecha_fin, '');
 
-  // Cambio de etapa (lo puede hacer también el supervisor).
+  // Ya no existe el cambio libre de etapa: el avance se registra solo con el plan de fabricación.
   r = await pedir('POST', `/api/proyectos/${id}/etapa`, { id_usuario: SUPERVISOR, etapa: 'Soldadura' });
-  assert.equal(r.datos.etapa_actual, 'Soldadura');
-  r = await pedir('POST', `/api/proyectos/${id}/etapa`, { id_usuario: OPERARIO, etapa: 'Lijado' });
-  assert.equal(r.estado, 400);
+  assert.equal(r.estado, 404);
+  r = await pedir('POST', `/api/proyectos/${id}/completar-etapa`, { id_usuario: OPERARIO });
+  r = await pedir('POST', `/api/proyectos/${id}/iniciar-etapa`, { id_usuario: SUPERVISOR });
+  assert.equal(r.datos.etapa_actual, 'Soldadura', 'también el supervisor registra el avance');
 
   // Pausa: causa y descripción obligatorias.
   r = await pedir('POST', `/api/proyectos/${id}/pausar`, { id_usuario: OPERARIO });
@@ -181,6 +177,9 @@ test('ciclo completo de un proyecto: alta → recepción → inicio → pausa �
   r = await pedir('POST', `/api/proyectos/${id}/continuar`, { id_usuario: OPERARIO });
   assert.equal(r.datos.estado, 'en_proceso');
   r = await pedir('POST', `/api/proyectos/${id}/finalizar`, { id_usuario: OPERARIO });
+  assert.equal(r.estado, 409, 'falta completar Soldadura');
+  r = await pedir('POST', `/api/proyectos/${id}/completar-etapa`, { id_usuario: OPERARIO });
+  r = await pedir('POST', `/api/proyectos/${id}/finalizar`, { id_usuario: OPERARIO });
   assert.equal(r.datos.estado, 'finalizado');
   assert.equal(r.datos.semaforo, 'fin');
   fila = (await pedir('GET', '/api/planilla')).datos.find((f) => f.id === id);
@@ -190,8 +189,8 @@ test('ciclo completo de un proyecto: alta → recepción → inicio → pausa �
   // Historial completo, en orden.
   const detalle = (await pedir('GET', `/api/proyectos/${id}`)).datos;
   assert.deepEqual(detalle.eventos.map((e) => e.tipo),
-    ['alta', 'recepcion', 'inicio', 'etapa', 'pausa', 'recepcion_parcial', 'continuar', 'finalizar']);
-  assert.equal(detalle.eventos[4].etapa, 'Soldadura', 'la pausa guarda en qué etapa ocurrió');
+    ['alta', 'recepcion', 'inicio', 'etapa_fin', 'etapa_inicio', 'pausa', 'recepcion_parcial', 'continuar', 'etapa_fin', 'finalizar']);
+  assert.equal(detalle.eventos[5].etapa, 'Soldadura', 'la pausa guarda en qué etapa ocurrió');
 
   // Un trabajo finalizado no admite más acciones.
   for (const accion of ['iniciar', 'pausar', 'continuar', 'finalizar']) {
@@ -200,12 +199,31 @@ test('ciclo completo de un proyecto: alta → recepción → inicio → pausa �
   }
 });
 
-test('otra parte del mismo pedido lleva el ítem siguiente', async () => {
-  const r = await pedir('POST', '/api/proyectos', nuevoProyecto({ id: '0645-PRU-E-02', nombre: 'Segunda parte' }));
-  assert.equal(r.estado, 201);
-  assert.equal(r.datos.item, 2);
-  const siguiente = await pedir('POST', '/api/proyectos', nuevoProyecto({ nombre: 'Otro pedido' }));
-  assert.equal(siguiente.datos.id, '0646-PRU-E-01');
+test('agregar pieza: conserva el número de orden y usa el siguiente ítem libre', async () => {
+  const pieza = { id_usuario: GERENCIA, nombre: 'Escalera de acceso', plazo_entrega: '2026-11-30', materiales: ['Planchuela'] };
+  // 0643 ya tiene los ítems 01 y 02 → la pieza nueva es la 03, del mismo cliente.
+  let r = await pedir('POST', '/api/proyectos/0643-MPU-U-02/agregar-pieza', pieza);
+  assert.equal(r.estado, 200);
+  assert.equal(r.datos.id, '0643-MPU-U-03');
+  assert.equal(r.datos.numero, 643);
+  assert.equal(r.datos.cliente, 'Minera Puna (ejemplo)');
+  assert.equal(r.datos.estado, 'pendiente_mat');
+  assert.deepEqual(r.datos.piezas_del_pedido.map((p) => p.id), ['0643-MPU-U-01', '0643-MPU-U-02', '0643-MPU-U-03']);
+  // La urgencia se puede elegir para la pieza; el ítem sigue siendo el siguiente del número.
+  r = await pedir('POST', '/api/proyectos/0643-MPU-U-01/agregar-pieza', { ...pieza, nombre: 'Soportes', urgencia: 'E' });
+  assert.equal(r.datos.id, '0643-MPU-E-04');
+  // Los códigos ya emitidos no cambian y se siguen escaneando igual.
+  const original = await pedir('GET', '/api/proyectos/0643-MPU-U-01');
+  assert.equal(original.estado, 200);
+  assert.equal(original.datos.nombre, 'Tanque acero inoxidable 2000 L');
+  // La pieza nueva tiene su propio link de seguimiento para el cliente.
+  const seguimiento = await pedir('GET', `/api/seguimiento/${r.datos.token_cliente}`);
+  assert.equal(seguimiento.datos.id, '0643-MPU-E-04');
+  // Validaciones: solo Gerencia, con nombre de la pieza.
+  r = await pedir('POST', '/api/proyectos/0643-MPU-U-01/agregar-pieza', { ...pieza, id_usuario: OPERARIO });
+  assert.equal(r.estado, 403);
+  r = await pedir('POST', '/api/proyectos/0643-MPU-U-01/agregar-pieza', { ...pieza, nombre: ' ' });
+  assert.match(r.datos.error, /nombre de la pieza/);
 });
 
 test('reprogramar: solo Gerencia y siempre con motivo', async () => {
@@ -335,7 +353,9 @@ test('planilla CSV: lista para Excel', async () => {
   assert.equal(estado, 200);
   assert.match(cabeceras.get('content-type'), /text\/csv/);
   const lineas = datos.replace(/^﻿/, '').trim().split('\r\n');
-  assert.equal(lineas[0].split(';').length, 17);
+  assert.equal(lineas[0].split(';').length, 15);
+  assert.ok(!lineas[0].includes('GEN. ID'), 'la columna GEN. ID ya no se usa');
+  assert.ok(!lineas[0].includes('APROB'), 'la columna APROB ya no se usa');
   assert.ok(!lineas[0].includes('Presupuesto'), 'la planilla ya no muestra el Nro de presupuesto');
   assert.match(lineas[0], /Cantidad de pausas;Tiempo total detenido \(horas\)$/);
   assert.match(lineas[0], /^#;FECHA IN;PLAZO ENTREGA;CLIENTE;NOMBRE PROY/);

@@ -79,7 +79,6 @@ test('al reprogramar, el conteo vuelve a empezar desde el nuevo plazo', () => {
 
 test('el link del cliente muestra solo datos públicos y no se puede adivinar', () => {
   const { s, id, avanzar } = preparar();
-  s.cambiarEtapa(id, { id_usuario: OPERARIO, etapa: 'Soldadura' });
   s.pausar(id, { id_usuario: OPERARIO, causa: 'Falta de material', detalle: 'Faltan bulones M10' });
   avanzar(5);
   const { token_cliente: token } = s.obtenerProyecto(id);
