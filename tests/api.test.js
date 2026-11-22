@@ -367,6 +367,13 @@ test('archivos: sirve la interfaz y no deja salir de la carpeta pública', async
   assert.ok([403, 404].includes(fuera3.status));
 });
 
+test('vaciar datos deja el sistema sin proyectos ni clientes', async () => {
+  const r = await pedir('POST', '/api/datos/vaciar');
+  assert.equal(r.estado, 200);
+  assert.equal((await pedir('GET', '/api/proyectos')).datos.length, 0);
+  await pedir('POST', '/api/demo/restablecer');
+});
+
 test('restablecer la demo vuelve a los 6 proyectos de ejemplo', async () => {
   const r = await pedir('POST', '/api/demo/restablecer');
   assert.equal(r.estado, 200);

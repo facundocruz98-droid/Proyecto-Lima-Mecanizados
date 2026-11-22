@@ -22,7 +22,7 @@ node server.js
 ```
 
 La primera vez se crea la base de datos `datos/lima.db` con **6 proyectos de ejemplo** (clientes ficticios).
-El botón "Restablecer datos de ejemplo" vuelve a ese estado en cualquier momento.
+El botón "Vaciar datos" (solo Gerencia) borra todos los proyectos y clientes para empezar de cero; después se cargan con "Cargar Excel" en la Planilla. El archivo `datos/proyectos-sin-iniciar.xlsx` trae 20 pedidos listos para que el operario los inicie.
 
 ### Ingreso y permisos
 
@@ -183,6 +183,7 @@ Todas las rutas piden sesión, salvo el ingreso, `/api/seguimiento/:link` y `/ap
 | GET | `/api/planilla.xlsx` | Excel con dos hojas: "Resumen de proyectos" e "Historial de pausas" |
 | GET | `/api/pausas` | Todas las pausas registradas, una por fila, con su duración |
 | GET | `/api/tiempo-real` | Avisos de cambios (Server-Sent Events) |
+| POST | `/api/datos/vaciar` | Borra proyectos, clientes, historial y etapas (los usuarios quedan). Botón «Vaciar datos» de Gerencia |
 | POST | `/api/demo/restablecer` | Vuelve a los datos de ejemplo |
 
 ## Pruebas

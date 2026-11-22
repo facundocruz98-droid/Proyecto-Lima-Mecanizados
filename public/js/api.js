@@ -55,6 +55,7 @@ export const api = {
   catalogoEtapas: () => pedir('GET', '/api/etapas'),
 
   restablecerDemo: () => pedir('POST', '/api/demo/restablecer'),
+  vaciarDatos: () => pedir('POST', '/api/datos/vaciar'),
 
   /** Envía un Excel para cargar proyectos. Sin confirmar solo devuelve la vista previa. */
   async importarPlanilla(archivo, idUsuario, confirmar = false) {

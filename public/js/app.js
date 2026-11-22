@@ -236,23 +236,23 @@ $('#botonTema').addEventListener('click', () => {
   pintarBotonTema();
 });
 
-// ---------- Datos de ejemplo ----------
+// ---------- Vaciar datos ----------
 $('#botonDemo').addEventListener('click', () => {
   const dialogo = abrirDialogo(`
     <form method="dialog" id="formDemo">
-      <h2>Restablecer datos de ejemplo</h2>
-      <p class="nota">Se borran todos los proyectos cargados y se vuelven a crear los 6 proyectos de ejemplo. Esta acción no se puede deshacer.</p>
+      <h2>Vaciar datos</h2>
+      <p class="nota">Se borran todos los proyectos, clientes, materiales, historial y etapas. Los usuarios y contraseñas no se tocan. Esta acción no se puede deshacer.</p>
       <div class="acciones-form">
-        <button class="boton" type="submit">Restablecer</button>
+        <button class="boton" type="submit">Vaciar</button>
         <button class="boton secundario" type="button" data-cerrar>Cancelar</button>
       </div>
     </form>`);
   dialogo.querySelector('#formDemo').addEventListener('submit', async (evento) => {
     evento.preventDefault();
     try {
-      await api.restablecerDemo();
+      await api.vaciarDatos();
       cerrarDialogo();
-      avisar('Datos de ejemplo restablecidos.');
+      avisar('Se borraron todos los datos.');
       await mostrarVista();
     } catch (error) {
       avisar(error.message, 'mal');

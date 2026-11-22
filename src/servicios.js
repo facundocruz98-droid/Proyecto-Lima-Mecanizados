@@ -865,6 +865,18 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     cargarDatosDeEjemplo(db, ahora());
   }
 
+  /**
+   * Deja el sistema sin datos: borra proyectos, materiales, historial, planes de etapas,
+   * catálogo de etapas y clientes. Las cuentas de usuario no se tocan.
+   */
+  function vaciarDatos() {
+    transaccion(db, () => {
+      db.exec(`DELETE FROM etapa_pedido; DELETE FROM etapa_catalogo; DELETE FROM evento; DELETE FROM material;
+               DELETE FROM proyecto; DELETE FROM cliente;`);
+      db.exec("DELETE FROM sqlite_sequence WHERE name IN ('evento', 'material', 'cliente', 'etapa_pedido', 'etapa_catalogo');");
+    });
+  }
+
   /** Si la base está vacía (primer arranque), carga los datos de ejemplo. */
   function inicializarSiEstaVacia() {
     if (q.cantidadUsuarios.get().n === 0) restablecerDemo();
@@ -874,7 +886,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     catalogo, listarProyectos, obtenerProyecto, seguimientoCliente, alertas, indicadores, planilla, historialPausas, datosDashboard,
     crearProyecto, importarPlanilla, reprogramar, registrarRecepcion, registrarRecepcionParcial,
     iniciar, pausar, continuar, finalizar, completarEtapa, iniciarEtapa, catalogoEtapas,
-    restablecerDemo, inicializarSiEstaVacia,
+    restablecerDemo, vaciarDatos, inicializarSiEstaVacia,
   };
 }
 

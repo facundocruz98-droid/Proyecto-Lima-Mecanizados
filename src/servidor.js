@@ -357,6 +357,11 @@ function crearServidor({ rutaBase, ahora, conIngreso = true } = {}) {
         if (resultado.guardado) avisarCambio();
         return responderJSON(res, 200, resultado);
       }
+      if (ruta === '/api/datos/vaciar') {
+        servicios.vaciarDatos();
+        avisarCambio();
+        return responderJSON(res, 200, { ok: true });
+      }
       if (ruta === '/api/demo/restablecer') {
         servicios.restablecerDemo();
         avisarCambio();
