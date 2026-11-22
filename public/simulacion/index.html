@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulación del proceso · Lima Mecanizados</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: claro y didáctico, como una maqueta que se recorre paso a paso.
+   IDEA: la planta de Lima Mecanizados vista desde arriba, con la información viajando entre las PCs por el servidor.
+   PICTURE: el render 3D de la planta, con paquetes de datos azules y material naranja animados encima.
+   COLOUR and TYPE: azul de la marca #1d5fa8, piso arena, acento naranja para lo físico; Archivo + Inter.
+   LAYOUT: barra de pasos arriba, planta grande a la izquierda, ficha del paso a la derecha, controles abajo. */
+:root{color-scheme:light dark;
+  --bg:light-dark(#efe6dc,#14171d);--card:light-dark(#fffdfb,#1d222b);--ink:light-dark(#15202d,#e8edf3);--soft:light-dark(#5a6878,#9aa8b8);
+  --line:light-dark(#e3d8cc,#2c333e);--azul:#1d5fa8;--azul2:light-dark(#e4eef9,#16304c);--nar:#e8891c;--ok:#17794a;--mal:#c2372b;
+  --piso:light-dark(#e9dccb,#2a2e36);--piso2:light-dark(#dfd0bd,#252930);--muro:light-dark(#f3ece4,#3a404b);--muro2:light-dark(#d9cdbf,#30353f);--ladrillo:light-dark(#b8634a,#7a4436)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+.wrap{max-width:1360px;margin:0 auto;padding:18px max(2vw,14px) 24px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.marca{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:16px;padding:10px 16px;box-shadow:0 2px 10px #0001}
+.marca b{font:800 19px/1.05 Archivo,sans-serif;color:var(--azul)}
+h1{font:800 clamp(20px,2.4vw,28px)/1.1 Archivo,sans-serif;margin:0;background:var(--card);padding:12px 20px;border-radius:16px;box-shadow:0 2px 10px #0001}
+.pasos{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 12px;padding:6px;background:var(--card);border-radius:999px;box-shadow:0 2px 10px #0001}
+.pasos button{display:flex;align-items:center;gap:6px;border:0;background:none;color:var(--soft);font:600 13.5px Inter,sans-serif;padding:7px 11px 7px 7px;border-radius:999px;cursor:pointer;min-height:36px}
+.pasos button span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--line);color:var(--soft);font-size:12px}
+.pasos button.hecho span{background:var(--azul2);color:var(--azul)}
+.pasos button.activo{background:var(--azul2);color:var(--azul)}.pasos button.activo span{background:var(--azul);color:#fff}
+.pasos button:focus-visible,.ctl button:focus-visible{outline:3px solid var(--nar);outline-offset:2px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.escena{position:relative;background:var(--card);border-radius:22px;overflow:hidden;box-shadow:0 2px 14px #0001;min-height:420px}
+.lienzo{position:relative;background:radial-gradient(circle at 35% 15%,#ffe9d0,#d9b6a9 78%)}.lienzo img{display:block;width:100%;height:auto}.lienzo svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.leyenda{position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--soft);background:var(--card);padding:6px 12px;border-radius:999px}
+.leyenda i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+aside{display:flex;flex-direction:column;gap:12px}
+.ficha,.pedido{background:var(--card);border-radius:22px;padding:20px;box-shadow:0 2px 14px #0001}
+.chip{display:inline-block;font:600 12.5px Inter;padding:4px 10px;border-radius:999px;background:var(--azul2);color:var(--azul)}
+.ficha h2{font:800 24px/1.15 Archivo,sans-serif;margin:10px 0 8px;text-wrap:balance}
+.ficha p{margin:0 0 12px;color:var(--soft)}
+.datos{background:var(--azul2);border-radius:14px;padding:12px 14px;margin:0;list-style:none;font-size:14px;display:grid;gap:4px}
+.datos b{color:var(--ink)}
+.pedido{padding:14px 18px;font-size:14px}
+.pedido b{display:block;font-family:Archivo,sans-serif;font-size:15px}
+.estado{display:inline-block;margin-top:6px;font-weight:600;font-size:13px;padding:3px 10px;border-radius:999px;background:var(--azul2);color:var(--azul)}
+.ctl{display:flex;gap:8px;margin-top:auto}
+.ctl button{min-height:46px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:700 15px Inter,sans-serif;padding:0 14px;cursor:pointer}
+.ctl .sig{flex:1;background:var(--azul);border-color:var(--azul);color:#fff}
+.ctl button:disabled{opacity:.45;cursor:default}
+.nota{font-size:13px;color:var(--soft);margin-top:10px}
+.barra-auto{height:4px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:8px;visibility:hidden}.barra-auto.on{visibility:visible}
+.barra-auto i{display:block;height:100%;width:100%;background:var(--azul);transform-origin:left;animation:llenar 7s linear}
+@keyframes llenar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.registro{grid-column:1/-1;background:var(--card);border-radius:22px;padding:16px 20px;box-shadow:0 2px 14px #0001}
+.registro h3{font:800 17px Archivo,sans-serif;margin:0 0 4px}.registro>p{margin:0 0 10px;font-size:14px;color:var(--soft)}
+.registro ol{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.registro li{display:grid;grid-template-columns:52px 1fr;gap:10px;font-size:14px;padding:7px 10px;border-radius:10px;background:var(--bg);animation:entra .4s ease}
+.registro li b{font-variant-numeric:tabular-nums;color:var(--azul)}.registro li.fuera{opacity:.6}.registro li.fuera b{color:var(--soft)}
+@keyframes entra{from{opacity:0;transform:translateY(6px)}}
+.foco{animation:latido 1.6s ease-in-out infinite}@keyframes latido{50%{opacity:.45}}
+.pulso{animation:pulso .9s ease-out forwards;transform-box:fill-box;transform-origin:center}@keyframes pulso{from{transform:scale(.6);opacity:.9}to{transform:scale(2.2);opacity:0}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+@media(max-width:980px){main{grid-template-columns:1fr}.ctl{margin-top:0}}
+@media(max-width:600px){.escena{min-height:0}h1{font-size:19px}.pasos button{font-size:12.5px;padding:6px 9px 6px 6px}.leyenda{position:static;margin:8px}}
+</style></head><body>
+<div class="wrap">
+  <header>
+    <div class="marca"><svg width="38" height="38" viewBox="-20 -20 40 40" aria-hidden="true"><g fill="#1467bc"><rect x="-3.6" y="-19" width="7.2" height="9" rx="1.5" transform="rotate(0)"/><rect x="-3.6" y="-19" width="7.2" height="9" rx="1.5" transform="rotate(45)"/><rect x="-3.6" y="-19" width="7.2" height="9" rx="1.5" transform="rotate(90)"/><rect x="-3.6" y="-19" width="7.2" height="9" rx="1.5" transform="rotate(135)"/><rect x="-3.6" y="-19" width="7.2" height="9" rx="1.5" transform="rotate(180)"/><rect x="-3.6" y="-19" width="7.2" height="9" rx="1.5" transform="rotate(225)"/><rect x="-3.6" y="-19" width="7.2" height="9" rx="1.5" transform="rotate(270)"/><rect x="-3.6" y="-19" width="7.2" height="9" rx="1.5" transform="rotate(315)"/><circle r="13"/></g><circle r="5.5" fill="#fff"/></svg><b>LIMA<br>MECANIZADOS</b></div>
+    <h1>Simulación del proceso de producción</h1>
+  </header>
+  <nav class="pasos" id="pasos" aria-label="Pasos del proceso"></nav>
+  <main>
+    <section class="escena" aria-label="Planta de Lima Mecanizados">
+      <div class="lienzo"><img src="planta.webp" alt="Maqueta 3D de la planta: gerencia, compras, almacén y taller" width="1270" height="795"><svg id="planta" viewBox="0 0 1270 795" aria-hidden="true"></svg></div>
+    </section>
+    <aside>
+      <div class="pedido"><b>Pedido 0871-MPU-U-01 · Tanque inoxidable 2000 L</b>Minera Puna · entrega 05/12<br><span class="estado" id="estado"></span></div>
+      <div class="ficha" aria-live="polite">
+        <span class="chip" id="area"></span>
+        <h2 id="titulo"></h2>
+        <p id="texto"></p>
+        <ul class="datos" id="datos"></ul>
+      </div>
+      <div class="ctl">
+        <button id="ant" aria-label="Paso anterior">◀</button>
+        <button id="auto">▶ Auto</button>
+        <button id="sig" class="sig"></button>
+      </div>
+      <div class="barra-auto" id="barraAuto"><i></i></div>
+    </aside>
+    <section class="registro" aria-live="polite">
+      <h3>Lo que queda guardado en el sistema</h3>
+      <p>Cada acción se registra con hora y responsable: así se arma el historial del pedido.</p>
+      <ol id="registro"></ol>
+    </section>
+  </main>
+</div>
+<script>
+{
+const svg=document.getElementById('planta'),NS='http://www.w3.org/2000/svg';
+const el=(t,a,padre=svg)=>{const e=document.createElementNS(NS,t);for(const k in a){const v=String(a[k]);if((k==='fill'||k==='stroke')&&v.startsWith('var('))e.style[k]=v;else e.setAttribute(k,v);}padre.appendChild(e);return e};
+const defs=el('defs',{});
+defs.innerHTML='<filter id="brillo" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="nube" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5aa2f5"/><stop offset="1" stop-color="#1d5fa8"/></linearGradient><filter id="sombra"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity=".25"/></filter>';
+const foco=el('g',{});
+// ---- Lo que se agrega sobre el render: servidor, PC del taller y celular del cliente ----
+const fuera=el('g',{});
+const NUBE=[1175,62];
+const nube=el('g',{transform:`translate(${NUBE[0]},${NUBE[1]})`,filter:'url(#sombra)'},fuera);
+nube.innerHTML='<path d="M-46 14 a22 22 0 0 1 6 -40 a30 30 0 0 1 56 -6 a24 24 0 0 1 30 34 a12 12 0 0 1 0 12z" fill="url(#nube)"/><rect x="-14" y="-6" width="28" height="7" rx="2" fill="#fff9"/><rect x="-14" y="4" width="28" height="7" rx="2" fill="#fff9"/>';
+const chapa=(x,y,txt,padre=fuera)=>{const w=txt.length*7.4+20,g=el('g',{transform:`translate(${x-w/2},${y})`},padre);el('rect',{width:w,height:24,rx:12,fill:'#fffaf2',stroke:'#fff',filter:'url(#sombra)'},g);el('text',{x:w/2,y:16.5,'text-anchor':'middle','font-size':12.5,'font-weight':700,fill:'#15202d'},g).textContent=txt;};
+chapa(NUBE[0]+5,NUBE[1]+24,'Servidor del sistema');
+// El puesto del operario (PC + lector) ya está dibujado en la imagen
+chapa(632,606,'Operario + lector');
+const CEL=[1180,640];
+const cel=el('g',{transform:`translate(${CEL[0]},${CEL[1]})`,filter:'url(#sombra)'},fuera);
+cel.innerHTML='<rect x="-24" y="-46" width="48" height="86" rx="10" fill="#15202d"/><rect x="-20" y="-39" width="40" height="70" rx="4" fill="#e4eef9"/><rect x="-13" y="-30" width="26" height="6" rx="2" fill="#1d5fa8"/><rect x="-13" y="-18" width="26" height="3" rx="1.5" fill="#9ab"/><rect x="-13" y="-11" width="19" height="3" rx="1.5" fill="#9ab"/>';
+chapa(CEL[0],CEL[1]+50,'Cliente (celular)');
+// Proveedor: el camión del render (está fuera del sistema)
+const PROV=[1212,290];
+const prov=el('g',{transform:`translate(${PROV[0]},${PROV[1]})`,filter:'url(#sombra)'},fuera);
+prov.innerHTML='<rect x="-34" y="-30" width="44" height="30" rx="3" fill="#f4f1ec" stroke="#56606c" stroke-width="2"/><path d="M10 -20 h14 l9 10 v10 h-23z" fill="#56606c"/><rect x="14" y="-17" width="8" height="7" fill="#cfe3f7"/><circle cx="-22" cy="2" r="6" fill="#2a3038"/><circle cx="20" cy="2" r="6" fill="#2a3038"/><circle cx="-22" cy="2" r="2.4" fill="#ccc"/><circle cx="20" cy="2" r="2.4" fill="#ccc"/>';
+chapa(PROV[0]-10,PROV[1]+14,'Proveedor');
+// Pantallas del render que "se encienden" cuando les llega un aviso
+const brillo=(pts)=>el('polygon',{points:pts,fill:'#7fd0ff',opacity:0},fuera);
+const PCS={
+  gerencia:{p:[350,212],pant:brillo('320,196 380,206 378,252 320,240')},
+  compras:{p:[712,160],pant:brillo('688,152 735,160 733,203 688,194')},
+  taller:{p:[643,498],pant:brillo('621,481 666,487 664,519 620,513')},
+  cliente:{p:[CEL[0],CEL[1]-48],pant:cel.children[1]},
+  proveedor:{p:PROV,pant:el('rect',{width:0,height:0},fuera)}
+};
+// ---- Capa de animación ----
+const capa=el('g',{});
+const avisos=el('g',{});
+const camino={
+  'proveedor-almacen':[[1232,300],[1150,345],[1010,372],[905,362]],
+  'almacen-taller':[[880,372],[820,410],[740,470],[700,545]],
+  'taller-expedicion':[[790,575],[930,520],[1060,455],[1150,395]]
+};
+const dPiso=k=>'M'+camino[k].map(p=>p.join(' ')).join(' L');
+function dDato(a,b){const A=a==='servidor'?NUBE:PCS[a].p,B=b==='servidor'?NUBE:PCS[b].p;
+  return a==='servidor'?`M${NUBE[0]} ${NUBE[1]} Q${B[0]} ${NUBE[1]-20} ${B[0]} ${B[1]}`:`M${A[0]} ${A[1]} Q${A[0]} ${NUBE[1]-20} ${NUBE[0]} ${NUBE[1]}`;}
+const GRIS='#56606c';
+function dAfuera(a,b){const A=PCS[a].p,B=PCS[b].p;return `M${A[0]} ${A[1]} Q${(A[0]+B[0])/2+40} ${Math.min(A[1],B[1])-40} ${B[0]} ${B[1]}`;}
+const quieto=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let corrida=0;
+function pulsar(){const c=el('circle',{cx:NUBE[0]+6,cy:NUBE[1]-6,r:30,fill:'none',stroke:'#2f86f0','stroke-width':3,class:'pulso'},capa);setTimeout(()=>c.remove(),950);}
+function viajar(d,color,ms,id,icono,etq){return new Promise(fin=>{
+  if(color===GRIS)el('path',{d,fill:'none',stroke:'#fff','stroke-width':9,'stroke-linecap':'round',opacity:.75},capa);
+  const ruta=el('path',{d,fill:'none',stroke:color,'stroke-width':4,'stroke-linecap':'round','stroke-dasharray':'10 9',opacity:.85,filter:'url(#brillo)'},capa);
+  const bola=icono==='caja'?el('g',{},capa):el('circle',{r:9,fill:color,stroke:'#fff','stroke-width':2.5,filter:'url(#brillo)'},capa);
+  if(icono==='caja')bola.innerHTML='<rect x="-13" y="-18" width="26" height="20" rx="2" fill="#e2b77b" stroke="#a87a42"/><rect x="-8" y="-27" width="16" height="10" fill="#fff" stroke="#999"/><path d="M-5 -25v6M-3 -25v6M0 -25v6M3 -25v6M5 -25v6" stroke="#222"/>';
+  let tx=null;if(etq){tx=el('g',{},capa);const w=etq.length*7+16;el('rect',{x:14,y:-30,width:w,height:21,rx:10.5,fill:color},tx);el('text',{x:14+w/2,y:-15.5,'text-anchor':'middle','font-size':12,'font-weight':700,fill:'#fff'},tx).textContent=etq;}
+  const L=ruta.getTotalLength(),t0=performance.now();
+  const paso=t=>{if(id!==corrida)return fin();const k=quieto?1:Math.min(1,(t-t0)/ms),q=ruta.getPointAtLength(L*k);
+    if(icono==='caja')bola.setAttribute('transform',`translate(${q.x},${q.y})`);else{bola.setAttribute('cx',q.x);bola.setAttribute('cy',q.y);}
+    if(tx)tx.setAttribute('transform',`translate(${q.x},${q.y})`);
+    k<1?requestAnimationFrame(paso):(bola.remove(),tx&&tx.remove(),fin());};
+  requestAnimationFrame(paso);
+})}
+const LADO={gerencia:'izq',compras:'der',taller:'izq'};
+function aviso(pc,txt,color){const [x,y]=PCS[pc].p,w=Math.max(120,txt.length*7.4+30),l=LADO[pc],
+  dx=pc==='proveedor'?-w+50:pc==='cliente'?-w+30:l==='izq'?-w-24:l==='der'?24:-w/2,dy=pc==='proveedor'?-80:pc==='cliente'?-130:pc==='gerencia'?-6:-44,g=el('g',{transform:`translate(${x+dx},${y+dy})`},avisos);
+  el('rect',{width:w,height:34,rx:12,fill:'#fffdfb',stroke:color,'stroke-width':2.5,filter:'url(#sombra)'},g);
+  el('circle',{cx:17,cy:17,r:5.5,fill:color},g);
+  el('text',{x:30,y:22,'font-size':13.5,'font-weight':700,fill:'#15202d'},g).textContent=txt;
+  const pant=PCS[pc].pant;pant.setAttribute('opacity',.85);pant.setAttribute('fill',color===ROJO?'#ff9d92':'#9fe0ff');}
+// Zona del paso actual: un anillo que late en el lugar de la acción
+const ZONAS={oficina:[300,300],compras:[660,232],almacen:[880,340],taller:[560,600],expedicion:[1130,400]};
+function enfocar(zs){foco.innerHTML='';(zs||[]).forEach(z=>{const [x,y]=ZONAS[z];
+  el('ellipse',{cx:x,cy:y,rx:78,ry:34,fill:'#2f86f0','fill-opacity':.18,stroke:'#2f86f0','stroke-width':3,class:'foco'},foco);});}
+function limpiar(){corrida++;capa.innerHTML='';avisos.innerHTML='';
+  for(const k of ['gerencia','compras'])PCS[k].pant.setAttribute('opacity',0);
+  PCS.taller.pant.setAttribute('opacity',0);PCS.cliente.pant.setAttribute('fill','#e4eef9');}
+
+// ---- Los pasos del proceso ----
+const AZ='#2f86f0',ROJO='#c2372b',VERDE='#17794a';
+const ZONA_PASO=[["oficina"], ["compras"], ["almacen", "compras"], ["compras", "taller"], ["taller"], ["taller"], ["compras", "taller"], ["taller"], ["taller", "expedicion"], []];
+const REG=[["08:02", "Gerencia · Alta del pedido 0871-MPU-U-01 (3 materiales)"], ["—", "Compras · Pedido al proveedor (fuera del sistema)"], ["10:15", "Compras · Recepción de materiales · hoja de ruta emitida"], ["10:16", "Compras · Hoja de ruta impresa con código de barras"], ["10:40", "Operario 1 · Inicio · plan: Corte → Soldadura → Terminación"], ["12:05", "Operario 1 · Pausa · Falta de material: bulones M12"], ["—", "Compras · Pedido urgente al proveedor: bulones M12 (fuera del sistema)"], ["14:30", "Compras · Llegada de material: bulones M12"], ["14:42", "Operario 1 · Continuó · Corte completa · inicia Soldadura"], ["17:20", "Operario 1 · Trabajo finalizado · planilla actualizada"], ["17:25", "Cliente · ve su pedido: Listo para entregar (solo lectura)"]];
+const PASOS=[
+ {c:'Alta',area:'Gerencia',t:'Alta del pedido',estado:'Pendiente de materiales',
+  x:'Gerencia carga el pedido en "Alta de proyecto": cliente, plazo, piezas y materiales indispensables. El sistema le asigna el código y le avisa a Compras al instante.',
+  d:['Pantalla: Alta de proyecto','Viaja: datos del pedido y materiales','Llega a: Compras (Esperando materiales)'],
+  f:[{dato:['gerencia','compras'],a:[['compras','Nuevo: esperando materiales',AZ]]}]},
+ {c:'Pedido',area:'Compras',t:'Pedido al proveedor',estado:'Pendiente de materiales',
+  x:'Compras hace el pedido de materiales a los proveedores.',
+  d:['Fuera del alcance del sistema'],
+  f:[{afuera:['compras','proveedor'],etq:'Pedido de materiales',a:[['proveedor','Pedido recibido',GRIS]]}]},
+ {c:'Recepción',area:'Almacén y Compras',t:'Llegan los materiales',estado:'Listo para iniciar',
+  x:'El proveedor entrega las cajas y el remito en el almacén. Compras verifica que llegó todo , toca "Recibido" e imprime su hoja de ruta. Desde ese momento el trabajo queda listo para empezar y aparece en la PC del taller.',
+  d:['Pantalla: Recepción y hoja de ruta','Viaja: materiales recibidos','Llega a: Estado de Trabajos (Gerencia y supervisor) y Puesto de taller (operarios)'],
+  f:[{piso:'proveedor-almacen'},{dato:['compras','gerencia','taller'],a:[['gerencia','Listo para iniciar',AZ],['taller','Nuevo: listo para iniciar',AZ]]}]},
+ {c:'Hoja de ruta',area:'Compras → Taller',t:'Hoja de ruta con código de barras',estado:'Listo para iniciar',
+  x:'Compras imprime la hoja de ruta con el código de barras del pedido. La hoja viaja en mano junto con los materiales hasta el taller: es la llave para registrar el avance.',
+  d:['Se imprime desde Compras','Viaja en mano: hoja + materiales','Código: 0871-MPU-U-01'],
+  f:[{piso:'almacen-taller'}]},
+ {c:'Inicio',area:'Taller',t:'El operario inicia la producción',estado:'En proceso · Corte',
+  x:'En la PC del taller, el operario escanea la hoja, arma el plan de etapas (Corte → Soldadura → Terminación) y confirma. El tiempo empieza a contar y todos ven que arrancó.',
+  d:['Pantalla: Puesto de taller','Viaja: inicio y plan de etapas','Llega a: Gerencia, supervisor y cliente'],
+  f:[{dato:['taller','gerencia','cliente'],a:[['gerencia','En proceso · Corte',AZ],['cliente','En fabricación',AZ]]}]},
+ {c:'Pausa',area:'Taller',t:'Pausa por falta de material',estado:'Pausado · Falta de material',
+  x:'Falta un material para seguir. El operario toca "Pausar" y elige el motivo. El aviso llega solo a Compras y a la campanita de Gerencia, sin que nadie tenga que ir a avisar.',
+  d:['Motivo obligatorio: Falta de material','Viaja: alerta de taller parado','Llega a: Compras y campana de Gerencia'],
+  f:[{dato:['taller','compras','gerencia'],a:[['compras','Taller parado: falta material',ROJO],['gerencia','Alerta nueva',ROJO]]}]},
+ {c:'Pedido urgente',area:'Compras',t:'Compras pide el faltante al proveedor',estado:'Pausado · Falta de material',
+  x:'Con la alerta en pantalla, Compras le pide al proveedor el material que falta.',
+  d:['Fuera del alcance del sistema'],
+  f:[{afuera:['compras','proveedor'],etq:'Pedido: bulones M12',a:[['proveedor','Pedido urgente',GRIS]]}]},
+ {c:'Llegada',area:'Compras → Taller',t:'Llega lo que faltaba',estado:'Pausado · material recibido',
+  x:'Cuando el proveedor entrega lo que faltaba, Compras toca "Registrar llegada" en la alerta. Al operario le aparece el aviso "Material recibido: puede continuar" y el material va al taller.',
+  d:['Pantalla: alertas de Compras','Viaja: material recibido','Llega a: Puesto de taller'],
+  f:[{piso:'proveedor-almacen'},{dato:['compras','taller'],a:[['taller','Material recibido: continuar',VERDE]]},{piso:'almacen-taller'}]},
+ {c:'Avance',area:'Taller',t:'Continúa y avanza por etapas',estado:'En proceso · Soldadura',
+  x:'El operario toca "Continuar" y sigue el plan: completa Corte, inicia Soldadura y después Terminación. Cada paso queda registrado con su hora y se ve en el historial.',
+  d:['Etapas: Corte ✓ → Soldadura → Terminación','Viaja: cada cambio de etapa','Llega a: Gerencia, supervisor y cliente'],
+  f:[{dato:['taller','gerencia','cliente'],a:[['gerencia','Etapa 2 de 3',AZ],['cliente','En fabricación',AZ]]}]},
+ {c:'Fin',area:'Taller → Expedición',t:'Trabajo finalizado',estado:'Finalizado',
+  x:'Completada la última etapa, el operario finaliza el trabajo. La pieza pasa a expedición y el sistema completa solo la planilla (En Ejec, Fecha Fin) y el resumen de producción.',
+  d:['Pantalla: Puesto de taller','Viaja: fin del trabajo','Llega a: Resumen de producción y Planilla'],
+  f:[{piso:'taller-expedicion'},{dato:['taller','gerencia'],a:[['gerencia','Finalizado · planilla al día',VERDE]]}]},
+ {c:'Cliente',area:'Cliente',t:'El cliente sigue su pedido',estado:'Listo para entregar',
+  x:'El cliente abre el link que le mandaron por WhatsApp y ve su pedido como un envío: recibido, en fabricación, listo para entregar. Sin llamar a la empresa y sin ver lo interno del taller.',
+  d:['Pantalla: Seguí tu pedido (celular)','Viaja: estado general del pedido','No ve: motivos de pausa ni operarios'],
+  f:[{dato:['servidor','cliente'],a:[['cliente','Listo para entregar',VERDE]]}]}
+];
+let actual=0,autoT=null;
+const $=id=>document.getElementById(id);
+$('pasos').innerHTML=PASOS.map((p,i)=>`<button data-i="${i}"><span>${i+1}</span>${p.c}</button>`).join('');
+/** Estado inicial: no pasa nada hasta que se toca el botón. */
+function reposo(){
+  actual=-1;limpiar();
+  document.querySelectorAll('#pasos button').forEach(b=>{b.classList.remove('activo','hecho');b.setAttribute('aria-current','false')});
+  $('area').textContent='Simulación interactiva';$('titulo').textContent='Todavía no hay pedidos';
+  $('texto').textContent='Tocá «1. Alta» para ver cómo Gerencia carga un pedido nuevo y cómo esa información sube al servidor y llega a cada sector.';
+  $('estado').textContent='Sin cargar';
+  $('datos').innerHTML='<li>11 pasos, del alta del pedido a la entrega</li><li>Azul: información que viaja por el sistema</li><li>Naranja: material y papeles que viajan en mano</li>';
+  $('registro').innerHTML='<li class="fuera"><b>—</b><span>Todavía no hay registros: empezá con el alta del pedido.</span></li>';
+  $('ant').disabled=true;$('sig').textContent='1. Alta ▶';
+}
+async function ir(i){
+  if(i<0)return reposo();
+  actual=Math.min(PASOS.length-1,i);const p=PASOS[actual];limpiar();const id=corrida;
+  document.querySelectorAll('#pasos button').forEach((b,k)=>{b.classList.toggle('activo',k===actual);b.classList.toggle('hecho',k<actual);b.setAttribute('aria-current',k===actual?'step':'false')});
+  $('area').textContent=p.area;$('titulo').textContent=`${actual+1}. ${p.t}`;$('texto').textContent=p.x;$('estado').textContent=p.estado;
+  $('datos').innerHTML=p.d.map(t=>`<li>${t}</li>`).join('');
+  $('registro').innerHTML=REG.slice(0,actual+1).map(([h,t],k)=>`<li class="${h==='—'?'fuera':''}"><b>${h}</b><span>${t}</span></li>`).reverse().join('');
+  $('ant').disabled=false;const s=PASOS[actual+1];$('sig').textContent=s?`${actual+2}. ${s.c} ▶`:'Volver a empezar ↺';
+  for(const f of p.f){
+    if(id!==corrida)return;
+    if(f.piso)await viajar(dPiso(f.piso),'#e8891c',1700,id,'caja',f.piso==='taller-expedicion'?'Pieza terminada':actual===3?'Hoja + materiales':f.piso==='proveedor-almacen'?'Materiales + remito':'Materiales');
+    if(f.afuera){await viajar(dAfuera(...f.afuera),GRIS,1700,id,null,f.etq);if(id!==corrida)return;f.a.forEach(([pc,t,c])=>aviso(pc,t,c));}
+    if(f.dato){const [de,...a]=f.dato;
+      if(de!=='servidor')await viajar(dDato(de,'servidor'),AZ,actual===0?2000:1100,id,null,actual===0?'Subiendo pedido a la nube…':p.c);
+      if(id!==corrida)return;pulsar();
+      await Promise.all(a.map(b=>viajar(dDato('servidor',b),AZ,1100,id)));
+      if(id!==corrida)return;f.a.forEach(([pc,t,c])=>aviso(pc,t,c));}
+  }
+}
+$('pasos').addEventListener('click',e=>{const b=e.target.closest('button');if(b){pararAuto();ir(+b.dataset.i)}});
+$('ant').onclick=()=>{pararAuto();ir(actual-1)};
+$('sig').onclick=()=>{pararAuto();ir(actual+1>=PASOS.length?0:actual+1)};
+const barra=$('barraAuto');
+function reiniciarBarra(){barra.classList.add('on');barra.innerHTML='<i></i>';}
+function pararAuto(){clearInterval(autoT);autoT=null;$('auto').textContent='▶ Auto';barra.classList.remove('on')}
+function alternarAuto(){if(autoT)return pararAuto();$('auto').textContent='❚❚ Pausa';const avanzar=()=>{ir(actual+1>=PASOS.length?0:actual+1);reiniciarBarra();};avanzar();autoT=setInterval(avanzar,7000)}
+$('auto').onclick=alternarAuto;
+document.addEventListener('keydown',e=>{if(e.target.closest('button')&&e.key===' ')return;
+  if(e.key==='ArrowRight'){pararAuto();ir(actual+1>=PASOS.length?0:actual+1)}
+  else if(e.key==='ArrowLeft'){pararAuto();ir(actual-1)}
+  else if(e.key===' '){e.preventDefault();alternarAuto()}});
+reposo();
+}
+</script>
+</body>
+</html>
