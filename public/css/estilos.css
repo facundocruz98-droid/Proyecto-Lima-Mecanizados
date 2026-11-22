@@ -699,6 +699,7 @@ textarea { min-height: 84px; resize: vertical; }
 /* Selector de período / causa y tabla de detalle */
 .selector-detalle { margin-top: 12px; }
 .dash .selector-detalle label { flex: 0 1 360px; }
+.dash .selector-detalle label { flex: 0 1 300px; }
 .detalle { margin-top: 16px; border-top: 1px solid var(--borde); padding-top: 14px; }
 .cabecera-detalle { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .dash .tabla { overflow: auto; max-height: 430px; border: 1px solid var(--borde); border-radius: var(--radio-chico); }

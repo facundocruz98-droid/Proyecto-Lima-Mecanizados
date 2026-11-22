@@ -84,14 +84,14 @@ const PLANTILLA = `
           <article class="tarjeta dash-tarjeta" aria-labelledby="tituloEstado">
             <header class="cabecera-tarjeta">
               <div>
-                <h2 id="tituloEstado">Estado de los proyectos</h2>
-                <p id="criterioEstado"></p>
+                <h2 id="tituloEstado">¿En qué estado están los trabajos?</h2>
+                <p id="criterioEstado" hidden></p>
               </div>
               <div class="ayuda-grafico">
                 <button type="button" class="icono-tarjeta" popovertarget="ayudaEstado" aria-label="Información sobre estado de los proyectos">i</button>
                 <div id="ayudaEstado" class="panel-ayuda" popover role="dialog" aria-labelledby="tituloAyudaEstado">
                   <div class="cabecera-ayuda">
-                    <h3 id="tituloAyudaEstado">Estado de los proyectos</h3>
+                    <h3 id="tituloAyudaEstado">¿En qué estado están los trabajos?</h3>
                     <button type="button" class="cerrar-ayuda" popovertarget="ayudaEstado" popovertargetaction="hide" aria-label="Cerrar información" autofocus>×</button>
                   </div>
                   <h4>¿Qué muestra?</h4>
@@ -124,14 +124,14 @@ const PLANTILLA = `
           <article class="tarjeta dash-tarjeta" aria-labelledby="tituloLinea">
             <header class="cabecera-tarjeta">
               <div>
-                <h2 id="tituloLinea">Cómo va la producción</h2>
-                <p id="criterioLinea"></p>
+                <h2 id="tituloLinea">¿Cómo viene la producción?</h2>
+                <p id="criterioLinea" hidden></p>
               </div>
               <div class="ayuda-grafico">
                 <button type="button" class="icono-tarjeta" popovertarget="ayudaLinea" aria-label="Información sobre cómo va la producción">i</button>
                 <div id="ayudaLinea" class="panel-ayuda" popover role="dialog" aria-labelledby="tituloAyudaLinea">
                   <div class="cabecera-ayuda">
-                    <h3 id="tituloAyudaLinea">Cómo va la producción</h3>
+                    <h3 id="tituloAyudaLinea">¿Cómo viene la producción?</h3>
                     <button type="button" class="cerrar-ayuda" popovertarget="ayudaLinea" popovertargetaction="hide" aria-label="Cerrar información" autofocus>×</button>
                   </div>
                   <h4>¿Qué muestra?</h4>
@@ -152,19 +152,19 @@ const PLANTILLA = `
             <p id="avisoLinea" class="aviso-grafico" role="status" hidden></p>
             <p id="vacioLinea" class="vacio-grafico" role="status"></p>
             <div id="zonaLinea" class="zona zona-linea" hidden><canvas id="linea" aria-hidden="true"></canvas></div>
-            <div id="controlesPunto" class="controles selector-detalle" hidden><label>Ver proyectos de<select id="puntoLinea"></select></label></div>
+            <div id="controlesPunto" class="controles selector-detalle" hidden><label><select id="puntoLinea" aria-label="Ver el detalle de un período"></select></label></div>
             <div id="detalleLinea" class="detalle" hidden></div>
           </article>
         </section>
 
         <section id="demoras" class="tarjeta dash-tarjeta" aria-labelledby="tituloDemoras">
           <header class="cabecera-tarjeta">
-            <div><h2 id="tituloDemoras">Causas de pausa</h2><p id="criterioDemoras">Pausas por fecha de ocurrencia.</p></div>
+            <div><h2 id="tituloDemoras">¿Por qué se frenan los trabajos?</h2><p id="criterioDemoras" hidden>Pausas por fecha de ocurrencia.</p></div>
             <div class="ayuda-grafico">
               <button type="button" class="icono-tarjeta" popovertarget="ayudaDemoras" aria-label="Información sobre causas de pausa">i</button>
               <div id="ayudaDemoras" class="panel-ayuda" popover role="dialog" aria-labelledby="tituloAyudaDemoras">
                 <div class="cabecera-ayuda">
-                  <h3 id="tituloAyudaDemoras">Causas de pausa</h3>
+                  <h3 id="tituloAyudaDemoras">¿Por qué se frenan los trabajos?</h3>
                   <button type="button" class="cerrar-ayuda" popovertarget="ayudaDemoras" popovertargetaction="hide" aria-label="Cerrar información" autofocus>×</button>
                 </div>
                 <h4>¿Qué muestra?</h4>
@@ -184,18 +184,18 @@ const PLANTILLA = `
           <p id="avisoDemoras" class="aviso-grafico" role="status" hidden></p>
           <p id="vacioDemoras" class="vacio-grafico" role="status"></p>
           <div class="desplazable"><div id="zonaDemoras" class="zona" hidden><canvas id="barras" aria-hidden="true"></canvas></div></div>
-          <div id="controlesCausa" class="controles selector-detalle" hidden><label>Consultar historial de<select id="grupoDemoras"></select></label></div>
+          <div id="controlesCausa" class="controles selector-detalle" hidden><label><select id="grupoDemoras" aria-label="Ver el detalle de una causa"></select></label></div>
           <div id="detalleDemoras" class="detalle" hidden></div>
         </section>
 
         <section id="etapasPausa" class="tarjeta dash-tarjeta" aria-labelledby="tituloEtapas">
           <header class="cabecera-tarjeta">
-            <div><h2 id="tituloEtapas">Pausas por etapa</h2><p id="criterioEtapas">Pausas por fecha de ocurrencia.</p></div>
+            <div><h2 id="tituloEtapas">¿En qué etapa se frenan los trabajos?</h2><p id="criterioEtapas" hidden>Pausas por fecha de ocurrencia.</p></div>
             <div class="ayuda-grafico">
               <button type="button" class="icono-tarjeta" popovertarget="ayudaEtapas" aria-label="Información sobre pausas por etapa">i</button>
               <div id="ayudaEtapas" class="panel-ayuda" popover role="dialog" aria-labelledby="tituloAyudaEtapas">
                 <div class="cabecera-ayuda">
-                  <h3 id="tituloAyudaEtapas">Pausas por etapa</h3>
+                  <h3 id="tituloAyudaEtapas">¿En qué etapa se frenan los trabajos?</h3>
                   <button type="button" class="cerrar-ayuda" popovertarget="ayudaEtapas" popovertargetaction="hide" aria-label="Cerrar información" autofocus>×</button>
                 </div>
                 <h4>¿Qué muestra?</h4>
@@ -215,7 +215,7 @@ const PLANTILLA = `
           <p id="avisoEtapas" class="aviso-grafico" role="status" hidden></p>
           <p id="vacioEtapas" class="vacio-grafico" role="status"></p>
           <div class="desplazable"><div id="zonaEtapas" class="zona" hidden><canvas id="barrasEtapas" aria-hidden="true"></canvas></div></div>
-          <div id="controlesEtapa" class="controles selector-detalle" hidden><label>Consultar historial de<select id="grupoEtapas"></select></label></div>
+          <div id="controlesEtapa" class="controles selector-detalle" hidden><label><select id="grupoEtapas" aria-label="Ver el detalle de una etapa"></select></label></div>
           <div id="detalleEtapas" class="detalle" hidden></div>
         </section>
 
@@ -462,6 +462,16 @@ function iniciar(raiz) {
         aplicarTemaGraficos();
         const configuracion = { responsive: true, maintainAspectRatio: false, animation: false,
             ...opciones, plugins: { legend: { display: false }, ...opciones.plugins } };
+        // Gráficos que se pueden tocar: manito al pasar el mouse y una pista al pie del cartelito.
+        if (opciones.onClick) {
+            configuracion.onHover = (evento, elementos) => {
+                evento.native.target.style.cursor = elementos.length ? "pointer" : "default";
+            };
+            const tooltip = configuracion.plugins.tooltip || {};
+            configuracion.plugins.tooltip = { ...tooltip,
+                footerColor: tema().superficie, footerFont: { weight: "normal", size: 11.5 }, footerMarginTop: 8,
+                callbacks: { footer: () => "Clic para ver el detalle", ...tooltip.callbacks } };
+        }
         let chart = charts.get(canvas);
         if (chart && chart.config.type !== tipo) {
             chart.destroy();
@@ -796,7 +806,7 @@ function iniciar(raiz) {
         const cantidad = puntos.filter(p => p.registros.length).length;
         ui.controlesPunto.hidden = !cantidad;
         opcionesDetalle(ui.puntoLinea, puntos.flatMap((p, i) => p.registros.length
-            ? [{ titulo: p.titulo + " · " + numero.format(p.registros.length) + " proyectos", valor: i }] : []), "Elegí un período", elegir);
+            ? [{ titulo: p.titulo + " · " + numero.format(p.registros.length) + " proyectos", valor: i }] : []), "Ver detalle de un período", elegir);
         chart = dibujar(ui.linea, "line", {
             labels: puntos.map(p => p.eje),
             datasets: [{ data: puntos.map(p => p.valor), label: medida, borderColor: tema().acento,
@@ -876,7 +886,6 @@ function iniciar(raiz) {
         const barras = [...grupos.values()]
             .sort((a, b) => valor(b) - valor(a) || a.nombre.localeCompare(b.nombre, "es-AR"));
         const avisos = [
-            abiertas ? numero.format(abiertas) + " pausas sin reanudación al cierre" + "." : "",
             incompletos ? numero.format(incompletos) + " proyectos con historial incompleto." : ""
         ].filter(Boolean).join(" ");
         const mensaje = barras.length ? "" : "No hay pausas para estos filtros.";
@@ -898,7 +907,7 @@ function iniciar(raiz) {
                 () => { elegir(-1); v.grupo.focus(); });
         }
         v.controles.hidden = !barras.length;
-        opcionesDetalle(v.grupo, barras.map(g => ({ titulo: g.nombre })), "Elegí una categoría", elegir);
+        opcionesDetalle(v.grupo, barras.map(g => ({ titulo: g.nombre })), sufijo === "Etapas" ? "Ver detalle de una etapa" : "Ver detalle de una causa", elegir);
         if (mensaje) return;
         dibujar(v.canvas, "bar", {
             labels: barras.map(g => g.nombre),
