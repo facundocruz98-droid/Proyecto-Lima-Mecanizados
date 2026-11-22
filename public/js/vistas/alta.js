@@ -5,7 +5,7 @@
  */
 import { api } from '../api.js';
 import { campoFecha } from '../calendario.js';
-import { avisar, esc, icono } from '../util.js';
+import { avisar, ayuda, esc, icono } from '../util.js';
 
 let raiz;
 let ctx;
@@ -95,7 +95,9 @@ export default {
     raiz.innerHTML = `
       <div class="alta-unica">
         <section class="tarjeta">
-          <div class="tarjeta-cabeza"><h2>Nuevo pedido</h2></div>
+          <div class="tarjeta-cabeza"><h2>Nuevo pedido</h2>${ayuda('ayudaAlta', '¿Cómo se carga un pedido?',
+            'Cargá una sola vez los datos del pedido (cliente, urgencia y fechas) y abajo sus piezas. Con «Agregar otra pieza» sumás más.',
+            'Cada pieza recibe su propio código con el mismo número de orden (ítem 01, 02…). Al crear el pedido, queda esperando materiales en Compras.')}</div>
           <div class="tarjeta-cuerpo">
             <form id="formAlta" novalidate autocomplete="off">
               <div class="par">

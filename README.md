@@ -24,6 +24,33 @@ node server.js
 La primera vez se crea la base de datos `datos/lima.db` con **6 proyectos de ejemplo** (clientes ficticios).
 El botón "Restablecer datos de ejemplo" vuelve a ese estado en cualquier momento.
 
+### Ingreso y permisos
+
+Cada persona entra con **su usuario y contraseña**, y ve solo su parte del sistema:
+
+| Usuario | Quién | Qué ve |
+| --- | --- | --- |
+| `dueno1`, `dueno2` | Dueños (rol Gerencia) | Estado de Trabajos, Resumen de Producción, Alta, Historial y Planilla |
+| `supervisor` | Supervisor de taller | Estado de Trabajos e Historial: controla, pero no registra avances ni cambia plazos |
+| `compras` | Encargado de Compras | Recepción y hoja de ruta |
+| `operario1`, `operario2` | Operarios | Puesto de taller |
+
+- **Contraseñas iniciales:** la primera vez que se inicia el sistema se crean al azar. Se muestran en la ventana negra
+  y quedan anotadas en `datos/CLAVES-INICIALES.txt`. Entregale a cada uno la suya, pedile que la cambie
+  ("Cambiar contraseña", abajo a la izquierda) y **borrá ese archivo**.
+- **Si alguien se olvida la contraseña:** `node herramientas/clave.js operario1` le pone una nueva al azar.
+- **Seguridad:** las contraseñas se guardan cifradas (scrypt); la sesión va en una cookie `HttpOnly` y `SameSite=Strict`
+  que dura una jornada (12 h); después de 5 intentos fallidos la cuenta se bloquea 5 minutos; el servidor controla
+  el permiso de cada rol en **cada** pedido y registra cada acción a nombre de quien inició sesión
+  (no se puede registrar nada a nombre de otro).
+- **En internet:** publicarlo siempre con **HTTPS** (por ejemplo detrás de Nginx o Cloudflare). Con HTTPS la cookie
+  de sesión se marca además como `Secure`.
+- **Clientes:** no tienen usuario. En la pantalla de ingreso tocan **"Seguir mi pedido"** (o escriben `cliente` como usuario)
+  y pegan el link o el código que les mandó la empresa. Los dueños sacan ese link desde **Historial → "Link para el cliente"**.
+  La página (`seguimiento.html`) solo muestra el estado general del pedido, nunca las operaciones internas.
+  Para la demostración muestra además 4 **pedidos de ejemplo**; para usarlo en serio hay que desactivarlos
+  iniciando con `set EJEMPLOS_CLIENTE=0 && node server.js` (así ningún cliente ve pedidos ajenos).
+
 ### Usarlo desde otras computadoras
 
 Al iniciar, la ventana muestra una dirección del tipo `http://192.168.x.x:3000`.
@@ -105,9 +132,10 @@ src/
   db.js                  Conexión a SQLite y esquema de tablas
   servicios.js           Casos de uso: alta, recepción, iniciar, pausar, continuar, finalizar…
   servidor.js            API REST, archivos de la interfaz y avisos en tiempo real
+  autenticacion.js       Cuentas, contraseñas cifradas, sesiones y permisos por rol
   datos-ejemplo.js       Proyectos de ejemplo para la demostración
 public/                  Interfaz web (HTML, CSS y JavaScript sin librerías)
-  index.html, hoja.html
+  index.html, hoja.html, login.html
   css/estilos.css
   js/app.js              Navegación, tiempo real, tema claro/oscuro
   js/api.js              Llamadas al servidor
@@ -117,12 +145,13 @@ public/                  Interfaz web (HTML, CSS y JavaScript sin librerías)
   js/vistas/             Una pantalla por archivo
 tests/                   Pruebas automáticas
 herramientas/respaldo.js Copia de seguridad de la base de datos
+herramientas/clave.js    Contraseña nueva para quien se olvidó la suya
 datos/                   Base de datos (se crea sola)
 ```
 
 ## Base de datos
 
-SQLite, 8 tablas: `cliente`, `usuario`, `proyecto`, `material`, `evento`, `etapa_catalogo` (etapas sugeridas del taller),
+SQLite, 10 tablas: `cuenta` (usuarios del sistema, con la contraseña cifrada), `sesion`, `cliente`, `usuario`, `proyecto`, `material`, `evento`, `etapa_catalogo` (etapas sugeridas del taller),
 `etapa_pedido` (plan de cada pedido, con inicio y fin reales de cada etapa) y `config`
 (guarda la clave con la que se firman los links de seguimiento).
 Cada acción queda guardada como un **evento** con fecha, hora, usuario, etapa, causa y detalle;
@@ -130,8 +159,13 @@ de ahí salen el historial, las alertas y los indicadores.
 
 ## API
 
+Todas las rutas piden sesión, salvo el ingreso, `/api/seguimiento/:link` y `/api/tiempo-real`.
+
 | Método | Ruta | Qué hace |
 | --- | --- | --- |
+| POST | `/api/sesion` | Ingresar con usuario y contraseña |
+| GET | `/api/sesion` | Quién inició sesión y qué pantallas ve |
+| POST | `/api/sesion/salir` · `/api/sesion/clave` | Cerrar sesión · cambiar la contraseña |
 | GET | `/api/catalogo` | Etapas, causas, usuarios, clientes y fecha de hoy |
 | GET | `/api/proyectos` | Proyectos con semáforo, ordenados para el panel |
 | GET | `/api/proyectos/:id` | Detalle: materiales, eventos y tiempos |
@@ -157,7 +191,7 @@ de ahí salen el historial, las alertas y los indicadores.
 npm test
 ```
 
-Corre 45 pruebas automáticas: reglas de negocio, plan de fabricación por etapas, generador de código de barras y el ciclo completo
+Corre 56 pruebas automáticas: ingreso y permisos por rol, reglas de negocio, plan de fabricación por etapas, generador de código de barras y el ciclo completo
 de un proyecto contra el servidor real (con una base de datos temporal).
 
 ## Copia de seguridad
@@ -171,8 +205,6 @@ Para hacerla todas las noches se puede programar con el Programador de tareas de
 
 ## Qué es de prototipo
 
-- **No hay inicio de sesión.** El rol se elige por pantalla; el servidor igual verifica que cada acción
-  la haga el rol que corresponde (por ejemplo, solo Gerencia reprograma).
 - **Los datos son de ejemplo**, con clientes ficticios.
 - **El link del cliente funciona dentro de la red de la empresa.** Para que un cliente lo abra desde su casa,
   el sistema tendría que estar publicado en internet (hosting o un servidor con dirección pública).

@@ -1,6 +1,6 @@
 /** La planilla de la empresa, completada por el escaneo. */
 import { api } from '../api.js';
-import { avisar, duracion, esc, fecha, icono } from '../util.js';
+import { avisar, ayuda, duracion, esc, fecha, icono } from '../util.js';
 
 let raiz;
 let ctx;
@@ -128,7 +128,10 @@ export default {
     raiz.innerHTML = `
       <section class="tarjeta">
         <div class="tarjeta-cabeza">
-          <span class="nota"><strong id="total" style="color:var(--texto)"></strong> · Las columnas en verde son las que agrega el sistema. Nadie carga "En Ejec" ni "Fecha Fin" a mano.</span>
+          <span class="nota" style="display:flex;align-items:center;gap:10px"><strong id="total" style="color:var(--texto)"></strong>${ayuda('ayudaPlanilla', '¿Qué es esta planilla?',
+            'Es la planilla de Excel que usaba la empresa, pero la arma el sistema solo con lo que pasa en el taller.',
+            'Las columnas en verde las completa el sistema (por ejemplo «En Ejec» y «Fecha Fin»): nadie las carga a mano.',
+            'Podés descargarla para Excel, copiarla o reemplazarla cargando un archivo .xlsx.')}</span>
           <div class="barra-acciones">
             <label class="boton secundario boton-archivo" id="cargarExcel" title="Reemplazar la planilla con un archivo .xlsx">
               <span class="ico">${icono('subir')}</span>Cargar Excel

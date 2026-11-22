@@ -6,6 +6,8 @@
   <title>Seguimiento de Taller · Lima Mecanizados</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d5fa8'/%3E%3Cpath d='M8 8v16M12 8v16M15 8v16M19 8v16M21.5 8v16M25 8v16' stroke='%23fff' stroke-width='1.6'/%3E%3C/svg%3E">
   <script>
+    // Hasta confirmar la sesión no se muestra nada (sin sesión se va a la pantalla de ingreso).
+    document.documentElement.classList.add('verificando-sesion');
     // Aplica el tema guardado antes de pintar, para que no parpadee.
     try {
       var tema = localStorage.getItem('lima-tema');
@@ -39,8 +41,6 @@
         <a href="#compras" data-ruta="compras"><span class="ico" data-icono="caja"></span><span>Recepción y hoja de ruta</span><span class="menu-cuenta" id="cuentaCompras" hidden></span></a>
         <p class="menu-grupo">Taller</p>
         <a href="#taller" data-ruta="taller"><span class="ico" data-icono="escaner"></span><span>Puesto de taller</span></a>
-        <p class="menu-grupo">Cliente</p>
-        <a href="#cliente" data-ruta="cliente"><span class="ico" data-icono="celular"></span><span>Seguimiento del cliente</span></a>
       </nav>
 
       <div class="lateral-pie">

@@ -75,7 +75,27 @@ const TRAZOS = {
   cerrar: '<path d="M6 6l12 12M18 6L6 18"/>',
   bandera: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
   siguiente: '<path d="M5 12h12M12 6l6 6-6 6"/>',
+  salir: '<path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/>',
+  llave: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M14.5 8.5l2 2"/>',
+  usuario: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  candado: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  ojo: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+  ojoTachado: '<path d="M3 3l18 18"/><path d="M10.6 5.6A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3.2 3.9M6.4 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5c1.6 0 3-.4 4.2-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
 };
+
+/** Botón (i) con un cuadrito de ayuda que explica para qué sirve una tarjeta. */
+export function ayuda(id, titulo, ...parrafos) {
+  return `<div class="ayuda-grafico">
+    <button type="button" class="icono-tarjeta" popovertarget="${id}" aria-label="${titulo}" title="${titulo}">i</button>
+    <div id="${id}" class="panel-ayuda" popover role="dialog" aria-labelledby="${id}Titulo">
+      <div class="cabecera-ayuda">
+        <h3 id="${id}Titulo">${titulo}</h3>
+        <button type="button" class="cerrar-ayuda" popovertarget="${id}" popovertargetaction="hide" aria-label="Cerrar información">×</button>
+      </div>
+      ${parrafos.map((p) => `<p>${p}</p>`).join('')}
+    </div>
+  </div>`;
+}
 
 /** Ícono SVG en línea (hereda el color del texto). */
 export function icono(nombre) {

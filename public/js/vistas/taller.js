@@ -9,7 +9,7 @@
  * Los pedidos que ya estaban en curso sin plan siguen con el flujo anterior (etapas fijas).
  */
 import { api } from '../api.js';
-import { esc, fecha, fechaHora, icono, pastillaEstado, textoPlazo } from '../util.js';
+import { ayuda, esc, fecha, fechaHora, icono, pastillaEstado, textoPlazo } from '../util.js';
 
 let raiz;
 let ctx;
@@ -21,7 +21,7 @@ let plan = [];         // etapas del formulario "Plan de fabricación" (todavía
 let sugerencias = [];  // catálogo de etapas del taller
 
 const el = (id) => raiz.querySelector(`#${id}`);
-const operario = () => Number(el('operario').value);
+const operario = () => ctx.usuario?.id_usuario ?? 0; // las acciones quedan a nombre de quien inició sesión
 const igual = (a, b) => a.toLocaleLowerCase('es') === b.toLocaleLowerCase('es');
 
 function enfocarEscaner() {
@@ -114,7 +114,11 @@ function conectarPlan() {
     if (agregarEtapa(entrada.value)) { entrada.value = ''; repintarPlan({ enfocar: true }); }
   };
   entrada.addEventListener('keydown', (evento) => {
-    if (evento.key === 'Enter') { evento.preventDefault(); agregarEscrita(); }
+    if (evento.key !== 'Enter') return;
+    evento.preventDefault();
+    // Con algo escrito, Enter agrega la etapa; con el campo vacío, guarda el plan e inicia (igual que el botón verde).
+    if (entrada.value.trim()) agregarEscrita();
+    else if (plan.length) form.requestSubmit();
   });
   entrada.addEventListener('input', () => { el('planError').textContent = ''; });
   el('planAgregar').addEventListener('click', agregarEscrita);
@@ -247,6 +251,12 @@ function conectarArrastre(form) {
   });
 
   lista.addEventListener('keydown', (evento) => {
+    // Enter sobre una etapa seleccionada: guarda el plan e inicia.
+    if (evento.key === 'Enter' && !evento.altKey && evento.target.closest('li') === evento.target) {
+      evento.preventDefault();
+      el('formPlan').requestSubmit();
+      return;
+    }
     const fila = evento.target.closest('li');
     if (!fila || evento.target !== fila || !evento.altKey || !['ArrowUp', 'ArrowDown'].includes(evento.key)) return;
     evento.preventDefault();
@@ -543,18 +553,18 @@ export default {
     mensaje = '';
     enviando = false;
 
-    const personal = ctx.catalogo.usuarios.filter((u) => u.rol === 'Operario' || u.rol === 'Supervisor');
     raiz.innerHTML = `
       <section class="tarjeta">
+        <div class="tarjeta-cabeza"><h2>Escaneá la hoja de ruta</h2>${ayuda('ayudaTaller', '¿Cómo se usa el puesto de taller?',
+          'Escaneá el código de barras de la hoja de ruta (o escribilo). Todo lo que registres queda a tu nombre.',
+          'Después podés iniciar el trabajo, pausarlo con su motivo, continuarlo o finalizarlo. Todo queda registrado al instante.')}</div>
         <div class="tarjeta-cuerpo">
           <form class="escaner" id="formCodigo" novalidate autocomplete="off">
             <div class="escaner-entrada">
               <span class="ico">${icono('escaner')}</span>
               <input id="codigo" placeholder="0000-ABC-E-01" aria-label="Código de la hoja de ruta" maxlength="20" spellcheck="false">
             </div>
-            <select id="operario" aria-label="Quién registra">
-              ${personal.map((u) => `<option value="${u.id}">${esc(u.nombre)}</option>`).join('')}
-            </select>
+            <span class="taller-quien">Registra: <strong>${esc(ctx.usuario?.nombre || '')}</strong></span>
             <button class="boton" type="submit">Buscar</button>
           </form>
           <div class="fichas" id="fichas" style="margin-top:12px"></div>
@@ -562,15 +572,6 @@ export default {
           <div id="trabajo"></div>
         </div>
       </section>`;
-
-    try {
-      const guardado = localStorage.getItem('lima-operario');
-      if (guardado && personal.some((u) => String(u.id) === guardado)) el('operario').value = guardado;
-    } catch { /* sin almacenamiento */ }
-    el('operario').addEventListener('change', () => {
-      try { localStorage.setItem('lima-operario', el('operario').value); } catch { /* sin almacenamiento */ }
-      enfocarEscaner();
-    });
 
     el('formCodigo').addEventListener('submit', (evento) => { evento.preventDefault(); buscar(el('codigo').value); });
     raiz.addEventListener('click', (evento) => {

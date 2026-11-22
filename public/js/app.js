@@ -3,7 +3,7 @@
  * tema claro/oscuro y datos compartidos (catálogo).
  */
 import { api } from './api.js';
-import { avisar, esc, pintarIconos } from './util.js';
+import { avisar, esc, icono, pintarIconos } from './util.js';
 import panel from './vistas/panel.js';
 import alta from './vistas/alta.js';
 import compras from './vistas/compras.js';
@@ -13,18 +13,23 @@ import planilla from './vistas/planilla.js';
 import dashboard from './vistas/dashboard.js';
 import cliente from './vistas/cliente.js';
 
+const RUTAS_GERENCIA = ['panel', 'dashboard', 'alta', 'historial', 'planilla'];
 const VISTAS = { panel, dashboard, alta, compras, taller, historial, planilla, cliente };
 const $ = (selector) => document.querySelector(selector);
 
 let catalogo = null;
+let sesion = null; // quién inició sesión: { nombre, rol, id_usuario, rutas }
 let vistaActual = null;
 let rutaActual = '';
 
 /** Contexto que recibe cada pantalla. */
 const contexto = {
   get catalogo() { return catalogo; },
-  /** Primer usuario con ese rol (el prototipo no tiene inicio de sesión). */
+  /** Persona que inició sesión. */
+  get usuario() { return sesion; },
+  /** Quién registra la acción: la persona de la sesión (el servidor igual usa siempre la sesión). */
   usuarioConRol(rol) {
+    if (sesion && sesion.rol === rol) return sesion.id_usuario;
     const usuario = catalogo.usuarios.find((u) => u.rol === rol);
     return usuario ? usuario.id : 0;
   },
@@ -55,7 +60,10 @@ function leerHash() {
   const [ruta, ...resto] = location.hash.replace(/^#/, '').split('/');
   let parametro = '';
   try { parametro = decodeURIComponent(resto.join('/')); } catch { parametro = ''; }
-  return { ruta: VISTAS[ruta] ? ruta : 'panel', parametro };
+  // Cada rol ve solo sus pantallas: si pide otra, va a su pantalla de inicio.
+  const permitidas = sesion ? sesion.rutas : Object.keys(VISTAS);
+  if (!VISTAS[ruta] || !permitidas.includes(ruta)) return { ruta: permitidas[0], parametro: '' };
+  return { ruta, parametro };
 }
 
 async function mostrarVista() {
@@ -78,6 +86,10 @@ async function mostrarVista() {
   $('#subtitulo').hidden = !vista.subtitulo;
   // Cada pantalla puede ajustar su encabezado con CSS (ej. "Alta de proyecto" lo centra junto al formulario).
   document.querySelector('.contenido').dataset.vista = ruta;
+  // La campana de alertas es solo para Gerencia y Supervisión (no para Compras, Taller ni el cliente).
+  const conCampana = RUTAS_GERENCIA.includes(ruta) && ['Gerencia', 'Supervisor'].includes(sesion?.rol);
+  $('#campana').hidden = !conCampana;
+  if (!conCampana) abrirCajon(false);
   document.title = `${vista.titulo} · Seguimiento de Taller`;
 
   // Cada pantalla recibe un marco nuevo: así sus manejadores de eventos no se acumulan.
@@ -248,6 +260,68 @@ $('#botonDemo').addEventListener('click', () => {
   });
 });
 
+// ---------- Sesión ----------
+/** Muestra solo las pantallas del rol, el nombre de quien entró y los botones de su cuenta. */
+function aplicarSesion() {
+  document.querySelectorAll('.menu a[data-ruta]').forEach((a) => { a.hidden = !sesion.rutas.includes(a.dataset.ruta); });
+  // Títulos de grupo (Gerencia, Compras…) que quedaron sin ninguna pantalla visible.
+  document.querySelectorAll('.menu .menu-grupo').forEach((titulo) => {
+    let siguiente = titulo.nextElementSibling;
+    let visible = false;
+    while (siguiente && !siguiente.classList.contains('menu-grupo')) {
+      if (!siguiente.hidden) visible = true;
+      siguiente = siguiente.nextElementSibling;
+    }
+    titulo.hidden = !visible;
+  });
+  $('#botonDemo').hidden = sesion.rol !== 'Gerencia';
+  const pie = document.querySelector('.lateral-pie');
+  pie.querySelector('.sesion-usuario')?.remove();
+  pie.querySelectorAll('[data-cuenta]').forEach((b) => b.remove());
+  pie.insertAdjacentHTML('beforeend', `
+    <div class="sesion-usuario"><span class="ico">${icono('usuario')}</span>
+      <div><strong>${esc(sesion.nombre)}</strong><small>${esc(sesion.rol === 'Gerencia' ? 'Dueño' : sesion.rol)}</small></div></div>
+    <button class="boton-lateral" type="button" data-cuenta="clave"><span class="ico">${icono('llave')}</span><span>Cambiar contraseña</span></button>
+    <button class="boton-lateral" type="button" data-cuenta="salir"><span class="ico">${icono('salir')}</span><span>Cerrar sesión</span></button>`);
+}
+
+document.querySelector('.lateral-pie').addEventListener('click', async (evento) => {
+  const boton = evento.target.closest('[data-cuenta]');
+  if (!boton) return;
+  if (boton.dataset.cuenta === 'salir') {
+    try { await api.salir(); } finally { location.replace('login.html'); }
+    return;
+  }
+  const dialogo = abrirDialogo(`
+    <form id="formClave" novalidate>
+      <h2>Cambiar contraseña</h2>
+      <p class="nota">Usá al menos 8 caracteres. Al cambiarla se cierra tu sesión en las demás computadoras.</p>
+      <div class="campo"><label for="claveActual">Contraseña actual</label><input id="claveActual" type="password" autocomplete="current-password"></div>
+      <div class="campo"><label for="claveNueva">Contraseña nueva</label><input id="claveNueva" type="password" autocomplete="new-password"></div>
+      <div class="campo"><label for="claveRepetir">Repetí la contraseña nueva</label><input id="claveRepetir" type="password" autocomplete="new-password"></div>
+      <p class="error" id="claveError" role="alert"></p>
+      <div class="acciones-form">
+        <button class="boton" type="submit">Guardar contraseña</button>
+        <button class="boton secundario" type="button" data-cerrar>Cancelar</button>
+      </div>
+    </form>`);
+  dialogo.querySelector('#claveActual').focus();
+  dialogo.querySelector('#formClave').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const error = dialogo.querySelector('#claveError');
+    const nueva = dialogo.querySelector('#claveNueva').value;
+    error.textContent = '';
+    if (nueva !== dialogo.querySelector('#claveRepetir').value) { error.textContent = 'Las dos contraseñas nuevas no coinciden.'; return; }
+    try {
+      await api.cambiarClave(dialogo.querySelector('#claveActual').value, nueva);
+      cerrarDialogo();
+      avisar('Contraseña cambiada.');
+    } catch (err) {
+      error.textContent = err.message;
+    }
+  });
+});
+
 // ---------- Tecla Enter ----------
 /*
  * En los campos de texto largos (motivos, "qué pasó") y en las listas desplegables, Enter no hace
@@ -272,8 +346,12 @@ async function iniciar() {
   pintarBotonTema();
   $('#vista').innerHTML = '<p class="cargando">Cargando…</p>';
   try {
+    sesion = await api.sesion(); // sin sesión, api lleva a la pantalla de ingreso
+    aplicarSesion();
+    document.documentElement.classList.remove('verificando-sesion');
     catalogo = await api.catalogo();
   } catch (error) {
+    document.documentElement.classList.remove('verificando-sesion');
     $('#vista').innerHTML = `
       <div class="sin-conexion">
         <h2>No se pudo conectar con el servidor</h2>

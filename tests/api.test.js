@@ -37,7 +37,7 @@ const OPERARIO = 4;
 
 test.before(async () => {
   carpeta = fs.mkdtempSync(path.join(os.tmpdir(), 'lima-pruebas-'));
-  ({ servidor } = crearServidor({ rutaBase: path.join(carpeta, 'pruebas.db'), ahora: () => AHORA }));
+  ({ servidor } = crearServidor({ rutaBase: path.join(carpeta, 'pruebas.db'), ahora: () => AHORA, conIngreso: false }));
   await new Promise((listo) => servidor.listen(0, '127.0.0.1', listo));
   base = `http://127.0.0.1:${servidor.address().port}`;
 });
@@ -138,7 +138,9 @@ test('ciclo completo de un proyecto: alta → recepción → inicio → pausa �
   assert.equal(r.estado, 404);
   r = await pedir('POST', `/api/proyectos/${id}/completar-etapa`, { id_usuario: OPERARIO });
   r = await pedir('POST', `/api/proyectos/${id}/iniciar-etapa`, { id_usuario: SUPERVISOR });
-  assert.equal(r.datos.etapa_actual, 'Soldadura', 'también el supervisor registra el avance');
+  assert.equal(r.estado, 403, 'el supervisor controla, pero el avance lo registran los operarios');
+  r = await pedir('POST', `/api/proyectos/${id}/iniciar-etapa`, { id_usuario: OPERARIO });
+  assert.equal(r.datos.etapa_actual, 'Soldadura');
 
   // Pausa: causa y descripción obligatorias.
   r = await pedir('POST', `/api/proyectos/${id}/pausar`, { id_usuario: OPERARIO });

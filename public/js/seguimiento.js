@@ -127,7 +127,8 @@ function pintar(t) {
 }
 
 function mostrarError(mensaje) {
-  destino.innerHTML = `<section class="tarjeta error"><h2>No pudimos mostrar el pedido</h2><p>${esc(mensaje)}</p></section>`;
+  destino.innerHTML = `<section class="tarjeta error"><h2>No pudimos mostrar el pedido</h2><p>${esc(mensaje)}</p>
+    <p><a href="seguimiento.html">Probar con otro link o código</a></p></section>`;
 }
 
 async function cargar() {
@@ -141,11 +142,56 @@ async function cargar() {
   }
 }
 
-cargar();
+/** Sin código: el cliente pega el link o el código que le mandaron. */
+function pedirCodigo(error = '') {
+  destino.innerHTML = `
+    <section class="tarjeta consulta">
+      <h2>Seguí tu pedido</h2>
+      <p>Pegá el link o el código de seguimiento que te envió Lima Mecanizados.</p>
+      <form id="formCodigo" novalidate>
+        <input id="codigoCliente" autocomplete="off" spellcheck="false" placeholder="Link o código de seguimiento" aria-label="Link o código de seguimiento">
+        <p class="consulta-error" role="alert">${esc(error)}</p>
+        <button type="submit">Ver mi pedido</button>
+      </form>
+      <p class="consulta-nota">¿No lo tenés? Pedíselo a la empresa: te lo mandan por WhatsApp o mail.</p>
+      <div id="ejemplosCliente"></div>
+    </section>`;
+  mostrarEjemplos();
+  const campo = document.getElementById('codigoCliente');
+  campo.focus();
+  document.getElementById('formCodigo').addEventListener('submit', (evento) => {
+    evento.preventDefault();
+    const texto = campo.value.trim();
+    let codigo = texto;
+    try { codigo = new URL(texto).searchParams.get('c') || ''; } catch { /* no es un link: es el código */ }
+    if (!codigo) { pedirCodigo('Pegá el link completo o el código que te enviaron.'); return; }
+    location.href = `seguimiento.html?c=${encodeURIComponent(codigo)}`;
+  });
+}
+
+/** Pedidos de ejemplo para probar la página (versión de demostración). */
+async function mostrarEjemplos() {
+  try {
+    const elegidos = await (await fetch('/api/ejemplos-cliente', { cache: 'no-store' })).json();
+    const caja = document.getElementById('ejemplosCliente');
+    if (!caja || !Array.isArray(elegidos) || !elegidos.length) return;
+    caja.innerHTML = `
+      <div class="ejemplos">
+        <p>Pedidos de ejemplo <small>(versión de demostración)</small></p>
+        ${elegidos.map((p) => `<a href="seguimiento.html?c=${encodeURIComponent(p.token_cliente)}">
+          <b>${esc(p.id)}</b><span>${esc(p.nombre)} · ${esc(p.estado_texto)}</span></a>`).join('')}
+      </div>`;
+  } catch { /* sin conexión: no se muestran ejemplos */ }
+}
+
+if (!token) pedirCodigo();
+else cargar();
 // Se actualiza sola: el servidor avisa cada cambio del taller (el mismo aviso en tiempo real que usan las pantallas
 // internas) y la página vuelve a pedir sus datos públicos. Por las dudas, también consulta cada 30 segundos.
-try {
-  const avisos = new EventSource('/api/tiempo-real');
-  avisos.addEventListener('cambio', () => cargar());
-} catch { /* navegador sin tiempo real: queda la consulta periódica */ }
-setInterval(cargar, 30000);
+if (token) {
+  try {
+    const avisos = new EventSource('/api/tiempo-real');
+    avisos.addEventListener('cambio', () => cargar());
+  } catch { /* navegador sin tiempo real: queda la consulta periódica */ }
+}
+if (token) setInterval(cargar, 30000);

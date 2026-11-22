@@ -10,6 +10,7 @@ const os = require('node:os');
 const { abrirBase } = require('./db');
 const { crearServicios, ErrorNegocio } = require('./servicios');
 const { crearLibro, fechaExcel, fechaHoraExcel, duracionExcel } = require('./excel');
+const { crearAutenticacion, ErrorIngreso } = require('./autenticacion');
 
 const CARPETA_PUBLICA = path.join(__dirname, '..', 'public');
 const TIPOS = {
@@ -24,12 +25,39 @@ const TIPOS = {
 const LIMITE_CUERPO = 100 * 1024;
 const LIMITE_EXCEL = 15 * 1024 * 1024;
 
-function responderJSON(res, estado, datos) {
+/** Encabezados de seguridad que van en todas las respuestas. */
+const SEGURIDAD = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN', // solo el propio sistema puede mostrar sus páginas dentro de otra
+  'Referrer-Policy': 'same-origin',
+};
+
+const TODOS = ['Gerencia', 'Supervisor', 'Compras', 'Operario'];
+const TALLER = ['Operario'];
+/** Quién puede usar cada parte de la API (el servidor lo controla siempre, no solo la pantalla). */
+function rolesPermitidos(metodo, ruta) {
+  if (metodo === 'GET') {
+    if (['/api/catalogo', '/api/proyectos', '/api/alertas'].includes(ruta) || /^\/api\/proyectos\/[^/]+$/.test(ruta)) return TODOS;
+    if (ruta === '/api/etapas') return [...TALLER, 'Gerencia', 'Supervisor'];
+    return ['Gerencia']; // indicadores, planilla, pausas, dashboard y descargas
+  }
+  const accion = /^\/api\/proyectos\/[^/]+\/([a-z-]+)$/.exec(ruta);
+  if (accion) {
+    if (['recepcion', 'recepcion-parcial'].includes(accion[1])) return ['Compras'];
+    if (accion[1] === 'reprogramar') return ['Gerencia'];
+    return TALLER;
+  }
+  return ['Gerencia']; // alta de pedidos, carga de Excel y restablecer datos
+}
+
+function responderJSON(res, estado, datos, extra = {}) {
   const cuerpo = JSON.stringify(datos);
   res.writeHead(estado, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(cuerpo),
     'Cache-Control': 'no-store',
+    ...SEGURIDAD,
+    ...extra,
   });
   res.end(cuerpo);
 }
@@ -164,6 +192,7 @@ function servirArchivo(req, res, rutaURL) {
       'Content-Type': TIPOS[path.extname(destino).toLowerCase()] || 'application/octet-stream',
       'Content-Length': contenido.length,
       'Cache-Control': 'no-cache',
+      ...SEGURIDAD,
     });
     res.end(req.method === 'HEAD' ? undefined : contenido);
   });
@@ -171,12 +200,17 @@ function servirArchivo(req, res, rutaURL) {
 
 /**
  * Crea el servidor (sin ponerlo a escuchar).
- * @param {{ rutaBase: string, ahora?: () => Date }} opciones
+ * @param {{ rutaBase: string, ahora?: () => Date, conIngreso?: boolean }} opciones
+ *   conIngreso: false solo para las pruebas automáticas (sin usuario y contraseña).
  */
-function crearServidor({ rutaBase, ahora } = {}) {
+function crearServidor({ rutaBase, ahora, conIngreso = true } = {}) {
   const db = abrirBase(rutaBase);
   const servicios = crearServicios(db, { ahora });
   servicios.inicializarSiEstaVacia();
+  const auth = crearAutenticacion(db, {
+    archivoClaves: rutaBase && rutaBase !== ':memory:' ? path.join(path.dirname(rutaBase), 'CLAVES-INICIALES.txt') : undefined,
+  });
+  const cuentasNuevas = conIngreso ? auth.asegurarCuentasIniciales() : [];
 
   // ----- Avisos en tiempo real (Server-Sent Events) -----
   const suscriptores = new Set();
@@ -204,6 +238,48 @@ function crearServidor({ rutaBase, ahora } = {}) {
   async function atenderAPI(req, res, ruta) {
     const { method } = req;
 
+    // ----- Rutas públicas: seguimiento del cliente (con su link firmado) y avisos de "hubo un cambio" -----
+    const publica = method === 'GET' && (ruta === '/api/tiempo-real' || ruta === '/api/ejemplos-cliente' || /^\/api\/seguimiento\/[^/]+$/.test(ruta));
+
+    // Pedidos que cambian datos: tienen que venir de esta misma página (protección contra sitios ajenos).
+    if (method !== 'GET' && req.headers.origin) {
+      let mismoOrigen = false;
+      try { mismoOrigen = new URL(req.headers.origin).host === req.headers.host; } catch { /* origen inválido */ }
+      if (!mismoOrigen) return responderJSON(res, 403, { error: 'Pedido rechazado.' });
+    }
+
+    // ----- Ingreso -----
+    if (ruta === '/api/sesion' && method === 'POST') {
+      if (!conIngreso) return responderJSON(res, 404, { error: 'El ingreso está desactivado.' });
+      const { cuenta, cookie } = auth.ingresar(req, await leerCuerpo(req));
+      return responderJSON(res, 200, cuenta, { 'Set-Cookie': cookie });
+    }
+    if (ruta === '/api/sesion/salir' && method === 'POST') {
+      return responderJSON(res, 200, { ok: true }, { 'Set-Cookie': auth.salir(req) });
+    }
+
+    let sesion = null;
+    if (conIngreso && !publica) {
+      sesion = auth.sesionDe(req);
+      if (!sesion) return responderJSON(res, 401, { error: 'Tu sesión terminó. Volvé a ingresar.' });
+      if (ruta === '/api/sesion' && method === 'GET') {
+        const { id_cuenta: _c, token_hash: _t, ...datos } = sesion;
+        return responderJSON(res, 200, datos);
+      }
+      if (ruta === '/api/sesion/clave' && method === 'POST') {
+        auth.cambiarClave(sesion, await leerCuerpo(req));
+        return responderJSON(res, 200, { ok: true });
+      }
+      if (!rolesPermitidos(method, ruta).includes(sesion.rol)) {
+        return responderJSON(res, 403, { error: 'Tu usuario no tiene permiso para esta parte del sistema.' });
+      }
+    }
+    /** Cuerpo del pedido con el usuario de la sesión: nadie puede registrar acciones a nombre de otro. */
+    const cuerpoConUsuario = async () => {
+      const datos = await leerCuerpo(req);
+      return sesion ? { ...datos, id_usuario: sesion.id_usuario } : datos;
+    };
+
     if (method === 'GET') {
       if (ruta === '/api/catalogo') {
         // Direcciones de red de esta PC: sirven para armar el link del cliente aunque Gerencia entre por "localhost".
@@ -212,6 +288,16 @@ function crearServidor({ rutaBase, ahora } = {}) {
           .filter((r) => r && r.family === 'IPv4' && !r.internal)
           .map((r) => `http://${r.address}:${puerto}`);
         return responderJSON(res, 200, { ...servicios.catalogo(), direcciones_red: red });
+      }
+      // Pedidos de ejemplo para la demostración de la página del cliente.
+      // Para usarlo en serio, desactivarlo iniciando con EJEMPLOS_CLIENTE=0 (así nadie ve pedidos ajenos).
+      if (ruta === '/api/ejemplos-cliente') {
+        if (process.env.EJEMPLOS_CLIENTE === '0') return responderJSON(res, 200, []);
+        const proyectos = servicios.listarProyectos();
+        const ejemplos = ['pendiente_mat', 'en_proceso', 'pausado', 'finalizado']
+          .map((estado) => proyectos.find((p) => p.estado === estado)).filter(Boolean)
+          .map((p) => ({ id: p.id, nombre: p.nombre, estado_texto: p.estado_texto, token_cliente: p.token_cliente }));
+        return responderJSON(res, 200, ejemplos);
       }
       const seguimiento = /^\/api\/seguimiento\/([^/]+)$/.exec(ruta);
       if (seguimiento) return responderJSON(res, 200, servicios.seguimientoCliente(decodeURIComponent(seguimiento[1])));
@@ -258,14 +344,14 @@ function crearServidor({ rutaBase, ahora } = {}) {
 
     if (method === 'POST') {
       if (ruta === '/api/proyectos') {
-        const creado = servicios.crearProyecto(await leerCuerpo(req));
+        const creado = servicios.crearProyecto(await cuerpoConUsuario());
         avisarCambio();
         return responderJSON(res, 201, creado);
       }
       if (ruta === '/api/planilla/importar') {
         const confirmar = req.headers['x-confirmar'] === 'si';
         const resultado = servicios.importarPlanilla(await leerArchivo(req, LIMITE_EXCEL), {
-          id_usuario: Number(req.headers['x-usuario']) || 0, confirmar,
+          id_usuario: sesion ? sesion.id_usuario : Number(req.headers['x-usuario']) || 0, confirmar,
         });
         if (resultado.guardado) avisarCambio();
         return responderJSON(res, 200, resultado);
@@ -277,7 +363,7 @@ function crearServidor({ rutaBase, ahora } = {}) {
       }
       const accion = /^\/api\/proyectos\/([^/]+)\/([a-z-]+)$/.exec(ruta);
       if (accion && Object.hasOwn(ACCIONES, accion[2])) {
-        const resultado = ACCIONES[accion[2]](decodeURIComponent(accion[1]), await leerCuerpo(req));
+        const resultado = ACCIONES[accion[2]](decodeURIComponent(accion[1]), await cuerpoConUsuario());
         avisarCambio();
         return responderJSON(res, 200, resultado);
       }
@@ -307,7 +393,7 @@ function crearServidor({ rutaBase, ahora } = {}) {
         res.end();
         return;
       }
-      if (error instanceof ErrorNegocio) {
+      if (error instanceof ErrorNegocio || error instanceof ErrorIngreso) {
         responderJSON(res, error.estado, { error: error.message });
       } else if (error instanceof URIError) {
         responderJSON(res, 400, { error: 'La dirección pedida no es válida.' });
@@ -325,7 +411,7 @@ function crearServidor({ rutaBase, ahora } = {}) {
     db.close();
   });
 
-  return { servidor, servicios, db };
+  return { servidor, servicios, db, auth, cuentasNuevas };
 }
 
 module.exports = { crearServidor, planillaCSV, planillaExcel };

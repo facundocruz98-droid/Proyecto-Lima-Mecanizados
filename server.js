@@ -27,10 +27,10 @@ process.emitWarning = function filtrarAvisos(aviso, ...resto) {
 
 const { crearServidor } = require('./src/servidor');
 
-const PUERTO = Number(process.env.PUERTO) || 3000;
+const PUERTO = Number(process.env.PORT || process.env.PUERTO) || 3000; // PORT lo asigna el hosting (Railway, Render…)
 const RUTA_BASE = process.env.RUTA_BASE || path.join(__dirname, 'datos', 'lima.db');
 
-const { servidor } = crearServidor({ rutaBase: RUTA_BASE });
+const { servidor, cuentasNuevas } = crearServidor({ rutaBase: RUTA_BASE });
 
 servidor.on('error', (error) => {
   if (error.code === 'EADDRINUSE') {
@@ -52,6 +52,12 @@ servidor.listen(PUERTO, '0.0.0.0', () => {
   console.log(`  En esta PC:          http://localhost:${PUERTO}`);
   for (const url of redes) console.log(`  Desde otras PC:      ${url}`);
   console.log(`  Base de datos:       ${RUTA_BASE}`);
+  if (cuentasNuevas.length) {
+    console.log('\n  Se crearon las cuentas de ingreso. Contraseñas iniciales:');
+    for (const c of cuentasNuevas) console.log(`    ${c.nombre.padEnd(22)} usuario: ${c.usuario.padEnd(11)} contraseña: ${c.clave}`);
+    console.log(`  (También quedaron anotadas en ${path.join(path.dirname(RUTA_BASE), 'CLAVES-INICIALES.txt')}.`);
+    console.log('   Entregalas, pedí que cada uno la cambie al entrar y después borrá ese archivo.)');
+  }
   console.log('\n  Para detener el sistema: Ctrl + C\n');
 });
 

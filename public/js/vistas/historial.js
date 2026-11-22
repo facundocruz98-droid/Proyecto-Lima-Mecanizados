@@ -1,6 +1,6 @@
 /** Historial de cada proyecto: datos principales y línea de tiempo. (Las causas de pausa están en el Dashboard.) */
 import { api } from '../api.js';
-import { codigoConUrgencia, duracion, esc, fecha, fechaDeInstante, fechaHora, icono, pastillaEstado, textoEtapa, textoPlazo } from '../util.js';
+import { avisar, ayuda, codigoConUrgencia, duracion, esc, fecha, fechaDeInstante, fechaHora, icono, pastillaEstado, textoEtapa, textoPlazo } from '../util.js';
 
 let raiz;
 let ctx;
@@ -115,6 +115,43 @@ function pintarLineaDeTiempo(eventos) {
     </section>`).join('');
 }
 
+/** Link público del proyecto (usa la dirección de red si se entró por "localhost"). */
+function linkCliente(p) {
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  const base = local && ctx.catalogo.direcciones_red && ctx.catalogo.direcciones_red.length
+    ? ctx.catalogo.direcciones_red[0]
+    : location.origin;
+  return `${base}/seguimiento.html?c=${encodeURIComponent(p.token_cliente)}`;
+}
+
+/** Ventana con el link de seguimiento para mandarle al cliente. */
+function abrirLinkCliente(p) {
+  const url = linkCliente(p);
+  const dialogo = ctx.abrirDialogo(`
+    <form method="dialog">
+      <h2>Link para el cliente · <span class="codigo">${esc(p.id)}</span></h2>
+      <p class="nota">${esc(p.cliente)} puede ver con este link el estado de su pedido y la fecha de entrega, sin usuario ni contraseña.
+        No ve las operaciones internas del taller.</p>
+      <div class="campo"><label for="linkCliente">Link de seguimiento</label><input id="linkCliente" type="text" readonly value="${esc(url)}"></div>
+      <div class="acciones-form">
+        <button class="boton" type="button" id="copiarLink"><span class="ico">${icono('copiar')}</span>Copiar link</button>
+        <a class="boton secundario" href="seguimiento.html?c=${encodeURIComponent(p.token_cliente)}" target="_blank" rel="noopener">Ver como el cliente</a>
+        <button class="boton secundario" type="button" data-cerrar>Cerrar</button>
+      </div>
+    </form>`);
+  const campo = dialogo.querySelector('#linkCliente');
+  campo.addEventListener('focus', () => campo.select());
+  dialogo.querySelector('#copiarLink').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      avisar('Link copiado. Pegalo en WhatsApp o en un mail para el cliente.');
+    } catch {
+      campo.select();
+      avisar('Seleccioná el link y copialo con Ctrl + C.');
+    }
+  });
+}
+
 function pintarProyecto(p) {
   detalle = p;
   el('resumen').innerHTML = `
@@ -122,7 +159,8 @@ function pintarProyecto(p) {
       <div>${codigoConUrgencia(p)}<h3 style="font-size:18px;margin-top:2px">${esc(p.nombre)}</h3>
         <p class="chico suave">${esc(p.cliente)}</p></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${pastillaEstado(p)}
-        ${p.estado === 'pendiente_mat' ? '' : `<a class="boton secundario chico" href="hoja.html?id=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><span class="ico">${icono('imprimir')}</span>Hoja de ruta</a>`}</div>
+        ${p.estado === 'pendiente_mat' ? '' : `<a class="boton secundario chico" href="hoja.html?id=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><span class="ico">${icono('imprimir')}</span>Hoja de ruta</a>`}
+        <button class="boton secundario chico" type="button" data-link-cliente><span class="ico">${icono('celular')}</span>Link para el cliente</button></div>
     </div>
     <dl class="resumen">
       <div><dt>Plazo de entrega</dt><dd>${fecha(p.plazo_entrega)}</dd></div>
@@ -169,7 +207,12 @@ export default {
       <div class="historial-unico">
         <section class="tarjeta">
           <div class="tarjeta-cabeza"><h2>Historial del proyecto</h2>
-            <select id="proyecto" aria-label="Proyecto" style="max-width:360px"></select></div>
+            <div style="display:flex;gap:10px;align-items:center;flex:1 1 auto;justify-content:flex-end">
+              <select id="proyecto" aria-label="Proyecto" style="max-width:360px"></select>
+              ${ayuda('ayudaHistorial', '¿Qué muestra el historial?',
+                'Elegí un proyecto para ver sus datos principales y todo lo que pasó, en orden: alta, llegada de materiales, inicio, etapas, pausas (con motivo y duración), cambios de plazo y fin.',
+                'Cada registro dice quién lo hizo y cuándo.')}
+            </div></div>
           <div class="tarjeta-cuerpo">
             <div id="resumen"></div>
             <div class="tl-cabeza"><h3>Línea de tiempo</h3><span id="cantidadEventos"></span></div>
@@ -177,6 +220,9 @@ export default {
           </div>
         </section>
       </div>`;
+    raiz.addEventListener('click', (evento) => {
+      if (evento.target.closest('[data-link-cliente]') && detalle) abrirLinkCliente(detalle);
+    });
     el('proyecto').addEventListener('change', async () => {
       elegido = el('proyecto').value;
       history.replaceState(null, '', `#historial/${encodeURIComponent(elegido)}`);

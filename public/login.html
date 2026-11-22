@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iniciar sesión · Lima Mecanizados</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d5fa8'/%3E%3Cpath d='M8 8v16M12 8v16M15 8v16M19 8v16M21.5 8v16M25 8v16' stroke='%23fff' stroke-width='1.6'/%3E%3C/svg%3E">
+  <script>
+    try {
+      var tema = localStorage.getItem('lima-tema');
+      if (tema === 'oscuro' || tema === 'claro') document.documentElement.dataset.tema = tema;
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body class="pantalla-ingreso">
+  <main class="ingreso">
+    <section class="ingreso-marca" aria-hidden="true">
+      <div class="ingreso-logo ingreso-logo-centro"><svg viewBox="0 0 32 32" width="40" height="40" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M8 8.5v15M11.5 8.5v15M14.5 8.5v15M18.5 8.5v15M21 8.5v15M24.5 8.5v15" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg><div><strong>Lima Mecanizados SRL</strong><small>Seguimiento de Taller</small></div></div>
+      <p class="ingreso-copy">© 2026 Lima Mecanizados SRL</p>
+    </section>
+
+    <section class="ingreso-lado">
+      <form class="ingreso-form" id="formIngreso" novalidate>
+        <div class="ingreso-logo-chico"><svg viewBox="0 0 32 32" width="40" height="40" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M8 8.5v15M11.5 8.5v15M14.5 8.5v15M18.5 8.5v15M21 8.5v15M24.5 8.5v15" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg><strong>Lima Mecanizados</strong></div>
+        <h1>Iniciá sesión</h1>
+        <p class="subtitulo">Ingresá con el usuario que te dio la empresa.</p>
+        <p class="ingreso-error" id="error" role="alert"></p>
+        <div class="campo"><label for="usuario">Usuario</label>
+          <div class="campo-icono"><span class="ico" data-icono="usuario"></span>
+            <input id="usuario" name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" placeholder="Ej.: operario1" autofocus></div></div>
+        <div class="campo"><label for="clave">Contraseña</label>
+          <div class="campo-icono"><span class="ico" data-icono="candado"></span>
+            <input id="clave" name="clave" type="password" autocomplete="current-password" maxlength="128" placeholder="Tu contraseña">
+            <button type="button" class="ver-clave" id="verClave" aria-label="Mostrar contraseña" title="Mostrar contraseña"><span data-icono="ojo"></span></button></div>
+          <p class="aviso-mayus" id="avisoMayus" hidden>⚠ Las mayúsculas están activadas</p></div>
+        <button class="boton ingreso-boton" type="submit" id="botonIngresar">Ingresar</button>
+        <p class="ingreso-ayuda">¿Te olvidaste la contraseña? Pedile a uno de los dueños que te la restablezca.</p>
+        <div class="ingreso-cliente">
+          <span>¿Sos cliente?</span>
+          <a class="boton secundario" href="seguimiento.html"><span data-icono="celular"></span>Seguir mi pedido</a>
+        </div>
+      </form>
+    </section>
+  </main>
+  <script type="module" src="js/login.js"></script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 datos/*.db
 datos/*.db-journal
+datos/CLAVES-INICIALES.txt
 respaldos/
 node_modules/
 .env

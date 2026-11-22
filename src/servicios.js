@@ -698,7 +698,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
   }
 
   // ---------- Acciones del taller ----------
-  const ROLES_TALLER = ['Operario', 'Supervisor'];
+  const ROLES_TALLER = ['Operario']; // el avance lo registran los operarios; el supervisor controla
 
   /** Valida y limpia la lista de etapas que manda el formulario "Plan de fabricación". */
   function validarPlan(lista) {

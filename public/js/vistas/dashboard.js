@@ -1023,8 +1023,8 @@ function iniciar(raiz) {
             cruceEstado = null;
         }
         const cantidad = datos.proyectos.length;
-        ui.actualizado.textContent = numero.format(cantidad) + (cantidad === 1 ? " proyecto" : " proyectos")
-            + " de la planilla · actualizado " + horaCorta.format(new Date());
+        ui.actualizado.textContent = "Actualizado " + horaCorta.format(new Date());
+        ui.actualizado.title = numero.format(cantidad) + (cantidad === 1 ? " proyecto" : " proyectos") + " en la planilla";
         mostrarKpis();
         actualizarPaneles();
     }
@@ -1034,6 +1034,7 @@ function iniciar(raiz) {
         try {
             if (!globalThis.Chart) throw new Error("No se pudo descargar Chart.js: revisá la conexión a internet.");
             const respuesta = await fetch("/api/dashboard", { cache: "no-store" });
+            if (respuesta.status === 401) { location.replace("login.html"); return; }
             if (!respuesta.ok) throw new Error("El servidor respondió con un error (" + respuesta.status + ").");
             const recibidos = await respuesta.json();
             if (carga !== versionCarga) return;

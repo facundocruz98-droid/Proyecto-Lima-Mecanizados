@@ -25,7 +25,8 @@ function filaProyecto(p) {
     : `${fecha(p.fecha_estimada)}${p.dias_corrimiento
       ? `<div class="chico corrida">+${p.dias_corrimiento} ${p.dias_corrimiento === 1 ? 'día' : 'días'} por pausas</div>`
       : '<div class="chico suave">sin demoras</div>'}`;
-  const reprogramar = cerrado
+  // Cambiar el plazo es decisión de los dueños: el supervisor no ve el botón.
+  const reprogramar = cerrado || ctx.usuario?.rol !== 'Gerencia'
     ? ''
     : `<button class="boton secundario chico" type="button" data-reprogramar="${esc(p.id)}">Reprogramar</button>`;
   return `

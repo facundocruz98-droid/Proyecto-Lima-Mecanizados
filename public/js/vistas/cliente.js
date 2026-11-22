@@ -1,6 +1,6 @@
 /** Vista del cliente: muestra, dentro del sistema, la misma página que ve el cliente con su link. */
 import { api } from '../api.js';
-import { avisar, esc } from '../util.js';
+import { avisar, ayuda, esc } from '../util.js';
 
 let raiz;
 let ctx;
@@ -46,7 +46,6 @@ async function actualizar() {
 
 export default {
   titulo: 'Seguimiento del cliente',
-  subtitulo: 'Lo que ve el cliente con su link: estado, etapa y fecha de entrega estimada.',
   async montar(elemento, contexto, parametro) {
     raiz = elemento;
     ctx = contexto;
@@ -54,7 +53,9 @@ export default {
     raiz.innerHTML = `
       <div class="cliente-vista">
         <section class="tarjeta">
-          <div class="tarjeta-cabeza"><h2>Proyecto</h2></div>
+          <div class="tarjeta-cabeza"><h2>Proyecto</h2>${ayuda('ayudaCliente', '¿Qué ve el cliente?',
+            'Lo que ve el cliente con su link: estado, etapa y fecha de entrega estimada.',
+            'Elegí el proyecto y copiá el link para mandárselo. No ve las operaciones internas del taller.')}</div>
           <div class="tarjeta-cuerpo">
             <div class="campo"><label for="cliProyecto">Elegí el proyecto</label>
               <select id="cliProyecto"></select></div>
