@@ -7,20 +7,12 @@ let raiz;
 let ctx;
 let resaltado = '';            // ID del proyecto resaltado desde una alerta
 let temporizadorResaltado = null;
-
-/** Hora en que quedó listo (materiales confirmados) e inicio real: la espera entre ambas no es fabricación. */
-function tiemposInicio(p) {
-  if (!p.listo_desde && !p.inicio_real) return '';
-  const partes = [];
-  if (p.listo_desde) partes.push(`Listo ${fechaHora(p.listo_desde)}`);
-  if (p.inicio_real) partes.push(`Inicio real ${fechaHora(p.inicio_real)}`);
-  else if (p.estado === 'listo') partes.push('sin iniciar');
-  return `<div class="chico suave" style="margin-top:4px">${partes.join(' · ')}</div>`;
-}
+let alertasExpandidas = false; // con muchas alertas se ve solo la primera fila hasta tocar "Ver todas"
+const ALERTAS_VISIBLES = 4;
 
 function filaProyecto(p) {
   const pausa = p.pausa_actual
-    ? `<div class="motivo">Pausado · ${esc(p.pausa_actual.causa)}: ${esc(p.pausa_actual.detalle)}</div>`
+    ? `<div class="motivo">${esc(p.pausa_actual.causa)}: ${esc(p.pausa_actual.detalle)}</div>`
     : (p.cancelacion && p.cancelacion.motivo ? `<div class="chico suave">Cancelado · ${esc(p.cancelacion.motivo)}</div>` : '');
   const cerrado = p.estado === 'finalizado' || p.estado === 'cancelado';
   let plazo = `<div class="chico suave">${textoPlazo(p.dias_restantes)}</div>`;
@@ -40,13 +32,12 @@ function filaProyecto(p) {
     <tr class="fila-${p.semaforo}${p.id === resaltado ? ' fila-resaltada' : ''}" data-id="${esc(p.id)}">
       <td>${codigoConUrgencia(p)}</td>
       <td><strong>${esc(p.nombre)}</strong><div class="chico suave">${esc(p.cliente)}</div>${pausa}</td>
-      <td>${pastillaEstado(p)}${tiemposInicio(p)}</td>
+      <td>${pastillaEstado(p)}</td>
       <td>${textoEtapa(p)}</td>
       <td class="num">${fecha(p.plazo_entrega)}${plazo}</td>
       <td class="num">${estimada}</td>
       <td class="celda-acciones apiladas">
         <a class="boton secundario chico" href="#historial/${encodeURIComponent(p.id)}">Historial</a>${reprogramar}
-        <a class="boton secundario chico" href="#cliente/${encodeURIComponent(p.id)}">Vista cliente</a>
       </td>
     </tr>`;
 }
@@ -66,9 +57,17 @@ function pintarAlertas(alertas) {
     ...alertas.material_recibido.map((p) => tarjetaAlerta('material_recibido', 'resuelta', 'Material recibido', `${esc(p.nombre)}: ya llegó lo que faltaba. El taller puede continuar.`, p)),
     ...alertas.por_vencer.map((p) => tarjetaAlerta('por_vencer', 'preventiva', 'Por vencer', `${esc(p.nombre)}: ${textoPlazo(p.dias_restantes)} y está ${esc(p.estado_texto.toLowerCase())}.`, p)),
   ];
+  const ocultas = bloques.length - ALERTAS_VISIBLES;
+  const visibles = alertasExpandidas || ocultas <= 0 ? bloques : bloques.slice(0, ALERTAS_VISIBLES);
+  const boton = ocultas > 0
+    ? `<button type="button" class="ver-mas-alertas" data-ver-alertas>${alertasExpandidas
+      ? 'Mostrar menos ▴'
+      : `Ver ${ocultas === 1 ? 'la alerta restante' : `las ${ocultas} alertas restantes`} ▾`}</button>`
+    : '';
   raiz.querySelector('#alertas').innerHTML = bloques.length
-    ? bloques.join('')
+    ? visibles.join('') + boton
     : '<p class="vacio">Sin alertas abiertas.</p>';
+  raiz.querySelector('#cantidadAlertas').textContent = bloques.length ? `(${bloques.length})` : '';
 }
 
 /** Baja hasta la fila del proyecto en la tabla y la resalta unos segundos. */
@@ -88,10 +87,14 @@ function irAlProyecto(id) {
 
 async function actualizar() {
   const [proyectos, alertas] = await Promise.all([api.proyectos(), api.alertas()]);
-  const cuenta = { rojo: 0, amarillo: 0, verde: 0, fin: 0, cancelado: 0 };
-  proyectos.forEach((p) => { cuenta[p.semaforo] += 1; });
+  const cuenta = { pausados: 0, amarillo: 0, verde: 0, fin: 0, cancelado: 0 };
+  proyectos.forEach((p) => {
+    if (p.estado === 'pausado') cuenta.pausados += 1;
+    if (p.semaforo !== 'rojo') cuenta[p.semaforo] += 1;
+  });
   raiz.querySelector('#indicadores').innerHTML = `
-    <div class="tarjeta indicador rojo"><b>${cuenta.rojo}</b><span>Vencidos o parados</span></div>
+    <div class="tarjeta indicador rojo" title="Proyectos sin finalizar ni cancelar cuyo plazo de entrega ya pasó."><b>${alertas.vencidos.length}</b><span>Vencidos</span></div>
+    <div class="tarjeta indicador amarillo" title="Proyectos actualmente en pausa, estén vencidos o no."><b>${cuenta.pausados}</b><span>Pausados</span></div>
     <div class="tarjeta indicador amarillo"><b>${cuenta.amarillo}</b><span>Por vencer</span></div>
     <div class="tarjeta indicador verde"><b>${cuenta.verde}</b><span>A tiempo</span></div>
     <div class="tarjeta indicador"><b>${cuenta.fin}</b><span>Finalizados</span></div>
@@ -99,7 +102,6 @@ async function actualizar() {
   raiz.querySelector('#proyectos').innerHTML = proyectos.length
     ? proyectos.map(filaProyecto).join('')
     : '<tr><td colspan="7" class="vacio">Todavía no hay proyectos. Cargá el primero desde "Alta de proyecto".</td></tr>';
-  pintarAlertas(alertas);
 }
 
 function abrirReprogramar(id, proyectos) {
@@ -143,21 +145,31 @@ function abrirReprogramar(id, proyectos) {
 }
 
 export default {
-  titulo: 'Panel',
-  subtitulo: 'Estado de todos los trabajos en tiempo real, ordenados por lo que hay que atender primero.',
-  async montar(elemento, contexto) {
+  titulo: 'Estado de Trabajos',
+  async montar(elemento, contexto, parametro) {
     raiz = elemento;
     ctx = contexto;
     resaltado = '';
+    alertasExpandidas = false;
     raiz.innerHTML = `
       <div class="indicadores" id="indicadores"></div>
-      <section class="tarjeta" style="margin-bottom:20px">
-        <div class="tarjeta-cabeza"><h2>Alertas</h2></div>
-        <div class="tarjeta-cuerpo"><div class="lista-alertas en-fila" id="alertas"></div></div>
-      </section>
       <section class="tarjeta">
         <div class="tarjeta-cabeza"><h2>Proyectos</h2>
-          <span class="nota">Rojo: plazo vencido o trabajo pausado · Amarillo: faltan ${ctx.catalogo.margen_alerta_dias} días o menos · Verde: a tiempo</span></div>
+          <div class="ayuda-grafico">
+            <button type="button" class="icono-tarjeta" popovertarget="ayudaSemaforo" aria-label="¿Qué significan los colores?" title="¿Qué significan los colores?">i</button>
+            <div id="ayudaSemaforo" class="panel-ayuda" popover role="dialog" aria-labelledby="tituloAyudaSemaforo">
+              <div class="cabecera-ayuda">
+                <h3 id="tituloAyudaSemaforo">¿Qué significan los colores?</h3>
+                <button type="button" class="cerrar-ayuda" popovertarget="ayudaSemaforo" popovertargetaction="hide" aria-label="Cerrar información">×</button>
+              </div>
+              <p>La franja de color a la izquierda de cada proyecto indica cómo viene respecto a su plazo de entrega.</p>
+              <ul class="leyenda-semaforo">
+                <li><span class="punto rojo"></span><div><strong>Rojo</strong><span>El plazo ya venció o el trabajo está pausado.</span></div></li>
+                <li><span class="punto amarillo"></span><div><strong>Amarillo</strong><span>Faltan ${ctx.catalogo.margen_alerta_dias} días o menos para el plazo.</span></div></li>
+                <li><span class="punto verde"></span><div><strong>Verde</strong><span>Va a tiempo.</span></div></li>
+              </ul>
+            </div>
+          </div></div>
         <div class="tarjeta-cuerpo sin-margen"><div class="tabla-caja">
           <table>
             <thead><tr><th>ID</th><th>Trabajo</th><th>Estado</th><th>Etapa</th><th>Plazo de entrega</th><th title="Plazo de la empresa más el tiempo que el trabajo estuvo detenido">Entrega estimada</th><th></th></tr></thead>
@@ -166,6 +178,11 @@ export default {
         </div></div>
       </section>`;
     raiz.addEventListener('click', async (evento) => {
+      if (evento.target.closest('[data-ver-alertas]')) {
+        alertasExpandidas = !alertasExpandidas;
+        await actualizar();
+        return;
+      }
       const alerta = evento.target.closest('[data-alerta]');
       const boton = evento.target.closest('[data-reprogramar]');
       try {
@@ -176,6 +193,8 @@ export default {
       }
     });
     await actualizar();
+    if (parametro) irAlProyecto(parametro);
   },
   actualizar,
+  irA: irAlProyecto,
 };

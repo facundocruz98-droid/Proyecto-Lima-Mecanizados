@@ -37,7 +37,7 @@ function bloquePieza() {
     <div class="campo"><label for="pz${n}Descripcion">Descripción</label>
       <input id="pz${n}Descripcion" class="pz-descripcion" maxlength="300" placeholder="Ej.: Fabricar, pintar, montar"></div>
     <div class="campo"><label for="pz${n}Materiales">Materiales indispensables para iniciar</label>
-      <textarea id="pz${n}Materiales" class="pz-materiales" placeholder="Uno por línea&#10;Chapa inox 3 mm&#10;Válvula esférica 2&quot;"></textarea></div>`;
+      <textarea id="pz${n}Materiales" class="pz-materiales" data-multilinea placeholder="Uno por línea&#10;Chapa inox 3 mm&#10;Válvula esférica 2&quot;"></textarea></div>`;
   return bloque;
 }
 

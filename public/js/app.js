@@ -117,6 +117,7 @@ async function actualizarContadores() {
     el.title = titulo;
   };
   poner('#cuentaAlertas', criticas, 'Trabajos vencidos o parados por falta de material');
+  pintarCampana(alertas);
   poner('#cuentaCompras', paraCompras, 'Proyectos esperando materiales');
 }
 
@@ -127,6 +128,62 @@ function actualizarFecha() {
   });
   $('#fechaHoy').textContent = texto.charAt(0).toUpperCase() + texto.slice(1);
 }
+
+// ---------- Campana de alertas ----------
+/* Como en las webs grandes: un contador arriba a la derecha y la lista completa en un panel lateral. */
+const GRUPOS_ALERTA = [
+  ['vencidos', 'Plazo vencido', 'rojo', (p) => `${esc(p.nombre)} · debía entregarse el ${fechaCorta(p.plazo_entrega)}`],
+  ['falta_material', 'Falta de material', 'rojo', (p) => `${esc(p.pausa_actual.detalle)} · avisado a Compras`],
+  ['material_recibido', 'Material recibido', 'verde', (p) => `${esc(p.nombre)} · el taller puede continuar`],
+  ['por_vencer', 'Por vencer', 'amarillo', (p) => `${esc(p.nombre)} · vence el ${fechaCorta(p.plazo_entrega)}`],
+];
+const fechaCorta = (iso) => { const [a, m, d] = iso.split('-'); return `${d}/${m}/${a}`; };
+
+function pintarCampana(alertas) {
+  const total = GRUPOS_ALERTA.reduce((n, [clave]) => n + alertas[clave].length, 0);
+  const cuenta = $('#campanaCuenta');
+  cuenta.hidden = total === 0;
+  cuenta.textContent = total > 99 ? '99+' : total;
+  $('#cajonTotal').textContent = total ? `(${total})` : '';
+  const grupos = GRUPOS_ALERTA.filter(([clave]) => alertas[clave].length).map(([clave, titulo, color, texto]) => {
+    // Las urgentes primero dentro de cada grupo.
+    const lista = [...alertas[clave]].sort((a, b) => (b.urgencia === 'U') - (a.urgencia === 'U'));
+    return `
+      <section class="cajon-grupo">
+        <h3><span class="punto ${color}"></span>${titulo} <span class="suave">${lista.length}</span></h3>
+        ${lista.map((p) => `
+          <button type="button" class="cajon-item" data-ir="${esc(p.id)}">
+            <span class="cajon-item-linea"><span class="codigo">${esc(p.id)}</span>${p.urgencia === 'U' ? '<span class="urgente">URG</span>' : ''}</span>
+            <span class="cajon-item-texto">${texto(p)}</span>
+          </button>`).join('')}
+      </section>`;
+  });
+  $('#cajonLista').innerHTML = grupos.length ? grupos.join('') : '<p class="vacio">Sin alertas abiertas.</p>';
+}
+
+function abrirCajon(abrir) {
+  $('#cajonAlertas').hidden = !abrir;
+  $('#cajonFondo').hidden = !abrir;
+  $('#campana').setAttribute('aria-expanded', String(abrir));
+}
+$('#campana').addEventListener('click', () => abrirCajon($('#cajonAlertas').hidden));
+$('#cajonCerrar').addEventListener('click', () => abrirCajon(false));
+$('#cajonFondo').addEventListener('click', () => abrirCajon(false));
+document.addEventListener('keydown', (evento) => {
+  if (evento.key === 'Escape' && !$('#cajonAlertas').hidden) abrirCajon(false);
+});
+// Tocar una alerta lleva a la fila del proyecto en "Estado de Trabajos" y la resalta.
+$('#cajonLista').addEventListener('click', (evento) => {
+  const item = evento.target.closest('[data-ir]');
+  if (!item) return;
+  abrirCajon(false);
+  // Si ya estamos en "Estado de Trabajos", solo baja hasta la fila (sin recargar la pantalla).
+  if (rutaActual === 'panel' && vistaActual && vistaActual.irA) {
+    vistaActual.irA(item.dataset.ir);
+    return;
+  }
+  location.hash = `#panel/${encodeURIComponent(item.dataset.ir)}`;
+});
 
 // ---------- Tiempo real ----------
 let temporizador = null;
@@ -189,6 +246,24 @@ $('#botonDemo').addEventListener('click', () => {
       avisar(error.message, 'mal');
     }
   });
+});
+
+// ---------- Tecla Enter ----------
+/*
+ * En los campos de texto largos (motivos, "qué pasó") y en las listas desplegables, Enter no hace
+ * nada por defecto. Acá Enter envía el formulario, igual que el botón principal (Guardar, Registrar…).
+ * Shift + Enter sigue haciendo un salto de línea. Los campos marcados con data-multilinea
+ * (ej.: materiales "uno por línea") conservan Enter para escribir varias líneas.
+ */
+document.addEventListener('keydown', (evento) => {
+  if (evento.key !== 'Enter' || evento.shiftKey || evento.ctrlKey || evento.altKey || evento.isComposing) return;
+  const campo = evento.target;
+  if (!(campo instanceof HTMLTextAreaElement || campo instanceof HTMLSelectElement)) return;
+  if (campo.hasAttribute('data-multilinea')) return;
+  const formulario = campo.form;
+  if (!formulario || !formulario.querySelector('[type="submit"]:not([disabled])')) return;
+  evento.preventDefault();
+  formulario.requestSubmit();
 });
 
 // ---------- Inicio ----------

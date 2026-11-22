@@ -1061,8 +1061,7 @@ function iniciar(raiz) {
 }
 
 export default {
-  titulo: 'Dashboard',
-  subtitulo: 'Estado de los proyectos, evolución de la producción y causas de pausa, con los datos de la planilla.',
+  titulo: 'Resumen de Producción',
   async montar(elemento) {
     elemento.innerHTML = PLANTILLA;
     try {

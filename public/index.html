@@ -30,8 +30,8 @@
 
       <nav class="menu" aria-label="Secciones">
         <p class="menu-grupo">Gerencia y Supervisión</p>
-        <a href="#panel" data-ruta="panel"><span class="ico" data-icono="panel"></span><span>Panel</span><span class="menu-cuenta" id="cuentaAlertas" hidden></span></a>
-        <a href="#dashboard" data-ruta="dashboard"><span class="ico" data-icono="grafico"></span><span>Dashboard</span></a>
+        <a href="#panel" data-ruta="panel"><span class="ico" data-icono="panel"></span><span>Estado de Trabajos</span><span class="menu-cuenta" id="cuentaAlertas" hidden></span></a>
+        <a href="#dashboard" data-ruta="dashboard"><span class="ico" data-icono="grafico"></span><span>Resumen de Producción</span></a>
         <a href="#alta" data-ruta="alta"><span class="ico" data-icono="mas"></span><span>Alta de proyecto</span></a>
         <a href="#historial" data-ruta="historial"><span class="ico" data-icono="reloj"></span><span>Historial</span></a>
         <a href="#planilla" data-ruta="planilla"><span class="ico" data-icono="tabla"></span><span>Planilla</span></a>
@@ -55,14 +55,28 @@
     <main class="contenido">
       <header class="cabecera">
         <div>
-          <h1 id="titulo">Panel</h1>
+          <h1 id="titulo">Estado de Trabajos</h1>
           <p id="subtitulo"></p>
         </div>
-        <div class="cabecera-fecha" id="fechaHoy"></div>
+        <div class="cabecera-derecha">
+          <div class="cabecera-fecha" id="fechaHoy"></div>
+          <button class="campana" id="campana" type="button" aria-label="Alertas" title="Alertas" aria-expanded="false" aria-controls="cajonAlertas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg><span class="campana-cuenta" id="campanaCuenta" hidden></span>
+          </button>
+        </div>
       </header>
       <div id="vista" tabindex="-1"></div>
     </main>
   </div>
+
+  <div class="cajon-fondo" id="cajonFondo" hidden></div>
+  <aside class="cajon" id="cajonAlertas" aria-label="Alertas" hidden>
+    <div class="cajon-cabeza">
+      <h2>Alertas <span class="suave" id="cajonTotal"></span></h2>
+      <button class="cajon-cerrar" id="cajonCerrar" type="button" aria-label="Cerrar"><span class="ico" data-icono="cerrar"></span></button>
+    </div>
+    <div class="cajon-cuerpo" id="cajonLista"></div>
+  </aside>
 
   <div class="avisos" id="avisos" aria-live="polite"></div>
   <dialog class="dialogo" id="dialogo"></dialog>

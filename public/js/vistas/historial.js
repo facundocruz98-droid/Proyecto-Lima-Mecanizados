@@ -131,6 +131,7 @@ function pintarProyecto(p) {
         : p.estado === 'cancelado' ? (p.cancelacion && p.cancelacion.fecha ? fechaDeInstante(p.cancelacion.fecha) : '—')
           : textoPlazo(p.dias_restantes)}</dd></div>
       <div><dt>Etapa actual</dt><dd>${textoEtapa(p)}</dd></div>
+      ${p.listo_desde || p.inicio_real ? `<div><dt>Inicio real</dt><dd>${p.inicio_real ? fechaHora(p.inicio_real) : 'sin iniciar'}${p.listo_desde ? ` <span class="chico suave">(listo ${fechaHora(p.listo_desde)})</span>` : ''}</dd></div>` : ''}
       <div><dt>Tiempo en proceso</dt><dd>${duracion(p.tiempos.horas_en_proceso)}</dd></div>
       <div><dt>Tiempo detenido</dt><dd>${duracion(p.tiempos.horas_en_pausa)}</dd></div>
     </dl>`;
