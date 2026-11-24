@@ -15,19 +15,20 @@
     .pagina .sin-conexion { background: #fce8e5; border-color: #c2372b; color: #15202d; }
     .pagina .sin-conexion h2 { color: #c2372b; }
     .pagina .cargando { color: #4a5868; }
-    @page { size: A5 portrait; margin: 10mm; }
+    @page { size: A4 portrait; margin: 12mm; }
     @media print {
       html, body { background: #fff; }
       .pagina { padding: 0; max-width: none; }
       .pagina .barra { display: none; }
-      .pagina .hoja { border: 0; box-shadow: none; padding: 0; }
+      /* Tamaño real (como en pantalla), no estirada a toda la hoja; el borde punteado sirve para recortarla. */
+      .pagina .hoja { width: 148mm; max-width: none; border: 1px dashed #888; border-radius: 0; box-shadow: none; padding: 7mm 8mm; }
     }
   </style>
 </head>
 <body>
   <main class="pagina">
     <div class="barra">
-      <p>Hoja de ruta lista para imprimir (tamaño A5).</p>
+      <p>Hoja de ruta lista para imprimir (sale chica en una hoja A4; se recorta por la línea punteada).</p>
       <button class="boton" type="button" id="imprimir">Imprimir</button>
     </div>
     <div id="hoja"><p class="cargando">Cargando…</p></div>
