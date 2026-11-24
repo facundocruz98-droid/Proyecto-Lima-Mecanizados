@@ -858,10 +858,14 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     const usuario = exigirRol(datos.id_usuario, ROLES_TALLER, 'registrar avances del taller');
     const p = buscarProyecto(id);
     if (p.estado !== 'pausado') throw new ErrorNegocio(`No se puede continuar: el trabajo está "${reglas.ESTADOS[p.estado]}".`, 409);
+    const pausa = q.ultimoEvento.get(p.id, 'pausa');
+    // Si se paró por falta de material, solo se sigue cuando Compras registró la llegada.
+    if (pausa && pausa.causa === 'Falta de material' && !q.recepcionPosterior.get(p.id, pausa.id)) {
+      throw new ErrorNegocio('Todavía no se puede continuar: Compras tiene que registrar la llegada del material que faltaba.', 409);
+    }
     return transaccion(db, () => {
       q.estado.run('en_proceso', p.id);
       // Se reanuda la misma etapa que se pausó.
-      const pausa = q.ultimoEvento.get(p.id, 'pausa');
       registrarEvento(p.id, 'continuar', usuario.id, { etapa: pausa?.etapa ?? p.etapa_actual });
       return obtenerProyecto(p.id);
     });

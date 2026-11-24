@@ -363,8 +363,14 @@ function cuerpoTrabajo(p) {
       </form>`;
   }
 
+  // Pausa por falta de material: Continuar se habilita recién cuando Compras registra la llegada.
+  const esperaMaterial = p.estado === 'pausado' && p.pausa_actual && p.pausa_actual.causa === 'Falta de material'
+    && !p.material_recibido_tras_pausa;
+  const puedeContinuar = p.estado === 'pausado' && !esperaMaterial;
   const pausa = p.pausa_actual
-    ? `<p class="motivo" style="margin-top:12px;font-size:14.5px">Pausado · ${esc(p.pausa_actual.causa)}: ${esc(p.pausa_actual.detalle)}${p.material_recibido_tras_pausa ? ' — <strong>el material ya llegó</strong>' : ''}</p>`
+    ? `<p class="motivo" style="margin-top:12px;font-size:14.5px">Pausado · ${esc(p.pausa_actual.causa)}: ${esc(p.pausa_actual.detalle)}${p.material_recibido_tras_pausa ? ' — <strong>el material ya llegó</strong>' : ''}</p>${esperaMaterial
+      ? '<p class="espera-material">Esperando material · Compras todavía no registró la llegada. Cuando la registre, se habilita <strong>Continuar</strong>.</p>'
+      : ''}`
     : '';
 
   // Pedido con plan de fabricación
@@ -383,7 +389,7 @@ function cuerpoTrabajo(p) {
       <div class="botones-taller cinco">
         ${boton('iniciar-etapa', proxima ? `Iniciar etapa<small>${esc(proxima.nombre)}</small>` : 'Iniciar etapa', 'iniciar', 'play', p.estado === 'en_proceso' && !p.etapa_en_curso && Boolean(proxima))}
         ${boton('pausar', 'Pausar', 'pausar', 'pausa', p.estado === 'en_proceso')}
-        ${boton('continuar', 'Continuar', 'continuar', 'play', p.estado === 'pausado')}
+        ${boton('continuar', 'Continuar', 'continuar', 'play', puedeContinuar)}
         ${boton('completar-etapa', 'Completar etapa', 'completar', 'check', p.estado === 'en_proceso' && p.etapa_en_curso)}
         ${boton('finalizar', 'Finalizar pedido', 'finalizar', 'bandera', p.estado === 'en_proceso' && p.todas_completadas && modo !== 'finalizar')}
       </div>${confirmar}`;
@@ -398,7 +404,7 @@ function cuerpoTrabajo(p) {
     <div class="botones-taller">
       ${boton('iniciar', 'Iniciar', 'iniciar', 'play', p.estado === 'listo')}
       ${boton('pausar', 'Pausar', 'pausar', 'pausa', p.estado === 'en_proceso')}
-      ${boton('continuar', 'Continuar', 'continuar', 'play', p.estado === 'pausado')}
+      ${boton('continuar', 'Continuar', 'continuar', 'play', puedeContinuar)}
       ${boton('finalizar', 'Finalizar', 'finalizar', 'check', p.estado === 'en_proceso')}
     </div>`;
 }

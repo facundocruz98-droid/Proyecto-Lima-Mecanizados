@@ -53,6 +53,7 @@ test('dos pausas con motivos distintos: cantidad, tiempo total y motivo actual',
   avanzar(1);
   s.pausar(id, { id_usuario: OPERARIO, causa: 'Falta de material', detalle: 'Faltan bulones' });
   avanzar(2);
+  s.registrarRecepcionParcial(id, { id_usuario: COMPRAS, material: 'bulones' }); // Compras registra la llegada
   s.continuar(id, { id_usuario: OPERARIO });
 
   // Pausa 2: activa, por máquina. Lleva 1,5 h hasta "ahora".
@@ -92,4 +93,32 @@ test('dos pausas con motivos distintos: cantidad, tiempo total y motivo actual',
   assert.match(hoja2, /Faltan bulones/);
   assert.match(hoja2, /Se rompió la plegadora/);
   db.close();
+});
+
+test('pausa por falta de material: Continuar recién cuando Compras registra la llegada', () => {
+  const reloj = new Date(2026, 10, 11, 8, 0, 0);
+  const db = abrirBase(':memory:');
+  const s = crearServicios(db, { ahora: () => reloj });
+  s.inicializarSiEstaVacia();
+  const { id } = s.crearProyecto({
+    id_usuario: GERENCIA, cliente: 'Cliente de prueba', codigo_cliente: 'PRU', nombre: 'Espera material',
+    urgencia: 'E', plazo_entrega: '2026-11-30', materiales: ['Chapa'],
+  });
+  s.registrarRecepcion(id, { id_usuario: COMPRAS });
+  s.iniciar(id, { id_usuario: OPERARIO });
+
+  // Por falta de material: bloqueado hasta que Compras registra la llegada.
+  s.pausar(id, { id_usuario: OPERARIO, causa: 'Falta de material', detalle: 'Faltan hierros' });
+  assert.throws(() => s.continuar(id, { id_usuario: OPERARIO }), /Compras tiene que registrar la llegada/);
+  assert.equal(s.obtenerProyecto(id).estado, 'pausado');
+  s.registrarRecepcionParcial(id, { id_usuario: COMPRAS, material: '10 hierros 12 mm' });
+  assert.equal(s.continuar(id, { id_usuario: OPERARIO }).estado, 'en_proceso');
+
+  // Por otro motivo: el operario continúa cuando quiere.
+  s.pausar(id, { id_usuario: OPERARIO, causa: 'Máquina o herramienta', detalle: 'Se rompió la amoladora' });
+  assert.equal(s.continuar(id, { id_usuario: OPERARIO }).estado, 'en_proceso');
+
+  // Una llegada vieja no destraba una pausa nueva por falta de material.
+  s.pausar(id, { id_usuario: OPERARIO, causa: 'Falta de material', detalle: 'Faltan bulones' });
+  assert.throws(() => s.continuar(id, { id_usuario: OPERARIO }), /Compras/);
 });

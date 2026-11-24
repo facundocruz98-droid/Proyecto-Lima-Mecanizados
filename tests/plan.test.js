@@ -144,6 +144,7 @@ test('la pausa queda vinculada a la etapa activa y "Continuar" reanuda esa etapa
   // Entre etapas, la pausa (ej. falta un insumo de la etapa siguiente) queda en la próxima etapa.
   s.completarEtapa(id, { id_usuario: OPERARIO });
   s.pausar(id, { id_usuario: OPERARIO, causa: 'Falta de material', detalle: 'Faltan mechas de 12 mm' });
+  s.registrarRecepcionParcial(id, { id_usuario: COMPRAS, material: 'mechas de 12 mm' }); // Compras registra la llegada
   p = s.continuar(id, { id_usuario: OPERARIO });
   assert.equal(p.eventos.filter((e) => e.tipo === 'pausa').at(-1).etapa, 'Perforado');
   assert.deepEqual(p.plan.map((e) => e.estado), ['completada', 'lista'], 'vuelve a esperar "Iniciar etapa"');
@@ -195,6 +196,7 @@ test('el cliente ve solo los 4 pasos: ni el plan de etapas ni los motivos de pau
     assert.ok(!textoPublico.includes(interno), `no expone "${interno}"`);
   }
   assert.deepEqual(pasos(), ['recibido:hecha', 'fabricacion:actual', 'listo:pendiente', 'entregado:pendiente']);
+  s.registrarRecepcionParcial(id, { id_usuario: COMPRAS, material: 'bulones M10' }); // Compras registra la llegada
   s.continuar(id, { id_usuario: OPERARIO });
   s.completarEtapa(id, { id_usuario: OPERARIO });
   s.iniciarEtapa(id, { id_usuario: OPERARIO });

@@ -51,6 +51,7 @@ test('las pausas corren la entrega estimada, incluida la pausa en curso', () => 
   avanzar(1);
   s.pausar(id, { id_usuario: OPERARIO, causa: 'Falta de material', detalle: 'Faltan bulones' });
   avanzar(30); // 30 h detenido → 2 días
+  s.registrarRecepcionParcial(id, { id_usuario: COMPRAS, material: 'bulones' }); // Compras registra la llegada
   s.continuar(id, { id_usuario: OPERARIO });
   let p = s.obtenerProyecto(id);
   assert.equal(p.dias_corrimiento, 2);
