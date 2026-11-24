@@ -66,6 +66,13 @@ async function mostrarHoja(id) {
     </div>`);
 }
 
+/** Lo que Compras tiene que recibir para ese proyecto: los materiales que cargó Gerencia en el alta, uno por renglón. */
+function listaParaRecibir(materiales) {
+  if (!materiales.length) return '<span class="suave chico">Sin materiales cargados</span>';
+  return `<div class="recibir-cantidad">${materiales.length === 1 ? '1 material' : `${materiales.length} materiales`}</div>
+    <ul class="recibir-lista">${materiales.map((m) => `<li>${esc(m.descripcion)}</li>`).join('')}</ul>`;
+}
+
 async function actualizar() {
   const [proyectos, alertas] = await Promise.all([api.proyectos(), api.alertas()]);
 
@@ -76,7 +83,7 @@ async function actualizar() {
         <tr>
           <td>${codigoConUrgencia(p)}</td>
           <td><strong>${esc(p.nombre)}</strong><div class="chico suave">${esc(p.cliente)} · entrega ${fecha(p.plazo_entrega)}</div></td>
-          <td class="chico">${p.materiales.map((m) => esc(m.descripcion)).join('<br>')}</td>
+          <td>${listaParaRecibir(p.materiales.filter((m) => m.indispensable))}</td>
           <td class="celda-acciones"><button class="boton chico" type="button" data-recibir="${esc(p.id)}">Recibido · emitir hoja</button></td>
         </tr>`).join('')
     : '<tr><td colspan="4" class="vacio">No hay proyectos esperando materiales.</td></tr>';
@@ -128,7 +135,7 @@ export default {
               </div></div>
             <div class="tarjeta-cuerpo sin-margen"><div class="tabla-caja">
               <table>
-                <thead><tr><th>ID</th><th>Trabajo</th><th>Materiales indispensables</th><th></th></tr></thead>
+                <thead><tr><th>ID</th><th>Trabajo</th><th>Qué tiene que recibir</th><th></th></tr></thead>
                 <tbody id="pendientes"></tbody>
               </table>
             </div></div>

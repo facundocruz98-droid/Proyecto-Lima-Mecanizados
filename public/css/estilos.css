@@ -1089,3 +1089,8 @@ textarea { min-height: 84px; resize: vertical; }
 .aviso-peligro { background: var(--mal-fondo); color: var(--texto); border-left: 4px solid var(--mal);
   border-radius: 8px; padding: 10px 12px; margin: 12px 0; font-size: 13.5px; line-height: 1.45; }
 .aviso-peligro strong { display: block; color: var(--mal); margin-bottom: 2px; }
+
+/* Compras: lista de lo que tiene que recibir cada proyecto (materiales del alta) */
+.recibir-cantidad { font-size: 12px; font-weight: 600; color: var(--texto-suave); margin-bottom: 4px; }
+.recibir-lista { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14.5px; line-height: 1.35; }
+.recibir-lista li::marker { color: var(--acento); }
