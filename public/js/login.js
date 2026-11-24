@@ -10,21 +10,26 @@ const avisoMayus = document.getElementById('avisoMayus');
 
 pintarIconos();
 
-try {
-  const yo = await fetch('/api/sesion', { cache: 'no-store' });
-  if (yo.ok) location.replace('/');
-} catch { /* sin conexión: se muestra el formulario igual */ }
-
-// Ingreso rápido del prototipo: se elige el rol y se entra sin contraseña.
+// Las dos consultas van juntas. Hasta tener la respuesta no se muestra ninguna de las dos formas de
+// ingreso, así no aparece por un instante el formulario de usuario y contraseña antes de los roles.
 const roles = document.getElementById('roles');
-try {
-  const rapida = await (await fetch('/api/sesion/rapida', { cache: 'no-store' })).json();
-  if (rapida.activo) {
-    roles.hidden = false;
-    document.getElementById('conClave').hidden = true;
-    document.getElementById('subtituloIngreso').textContent = 'Elegí con qué rol querés entrar.';
-  }
-} catch { /* si falla, queda el ingreso con usuario y contraseña */ }
+const conClave = document.getElementById('conClave');
+const [sesion, rapida] = await Promise.all([
+  fetch('/api/sesion', { cache: 'no-store' }).catch(() => null),
+  fetch('/api/sesion/rapida', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
+]);
+if (sesion?.ok) {
+  location.replace('/'); // ya hay una sesión abierta: entra directo sin mostrar nada
+} else if (rapida.activo) {
+  // Ingreso rápido del prototipo: se elige el rol y se entra sin contraseña.
+  roles.hidden = false;
+  document.getElementById('subtituloIngreso').textContent = 'Elegí con qué rol querés entrar.';
+} else {
+  // Si el ingreso rápido está apagado (o falla la consulta), queda el ingreso con usuario y contraseña.
+  conClave.hidden = false;
+  document.getElementById('subtituloIngreso').textContent = 'Ingresá con el usuario que te dio la empresa.';
+  formulario.usuario.focus();
+}
 
 roles.addEventListener('click', async (evento) => {
   const elegido = evento.target.closest('[data-rol]');
