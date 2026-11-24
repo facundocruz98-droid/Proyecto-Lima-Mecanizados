@@ -45,7 +45,7 @@ function rolesPermitidos(metodo, ruta) {
   const accion = /^\/api\/proyectos\/[^/]+\/([a-z-]+)$/.exec(ruta);
   if (accion) {
     if (['recepcion', 'recepcion-parcial'].includes(accion[1])) return ['Compras'];
-    if (accion[1] === 'reprogramar') return ['Gerencia'];
+    if (accion[1] === 'reprogramar' || accion[1] === 'cancelar') return ['Gerencia'];
     return TALLER;
   }
   return ['Gerencia']; // alta de pedidos, carga de Excel y restablecer datos
@@ -234,6 +234,7 @@ function crearServidor({ rutaBase, ahora, conIngreso = true } = {}) {
     'completar-etapa': servicios.completarEtapa,
     'iniciar-etapa': servicios.iniciarEtapa,
     reprogramar: servicios.reprogramar,
+    cancelar: servicios.cancelar,
   };
 
   async function atenderAPI(req, res, ruta) {

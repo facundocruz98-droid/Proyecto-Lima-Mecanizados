@@ -25,10 +25,11 @@ function filaProyecto(p) {
     : `${fecha(p.fecha_estimada)}${p.dias_corrimiento
       ? `<div class="chico corrida">+${p.dias_corrimiento} ${p.dias_corrimiento === 1 ? 'día' : 'días'} por pausas</div>`
       : '<div class="chico suave">sin demoras</div>'}`;
-  // Cambiar el plazo es decisión de los dueños: el supervisor no ve el botón.
+  // Cambiar el plazo o cancelar son decisiones de los dueños: el supervisor no ve los botones.
   const reprogramar = cerrado || ctx.usuario?.rol !== 'Gerencia'
     ? ''
-    : `<button class="boton secundario chico" type="button" data-reprogramar="${esc(p.id)}">Reprogramar</button>`;
+    : `<button class="boton secundario chico" type="button" data-reprogramar="${esc(p.id)}">Reprogramar</button>
+       <button class="boton secundario chico boton-peligro" type="button" data-cancelar="${esc(p.id)}">Cancelar proyecto</button>`;
   return `
     <tr class="fila-${p.semaforo}${p.id === resaltado ? ' fila-resaltada' : ''}" data-id="${esc(p.id)}">
       <td>${codigoConUrgencia(p)}</td>
@@ -145,6 +146,51 @@ function abrirReprogramar(id, proyectos) {
   });
 }
 
+function abrirCancelar(id, proyectos) {
+  const p = proyectos.find((x) => x.id === id);
+  if (!p) return;
+  const dialogo = ctx.abrirDialogo(`
+    <form id="formCancelar" novalidate>
+      <h2>Cancelar proyecto · <span class="codigo">${esc(p.id)}</span></h2>
+      <p class="nota">${esc(p.nombre)} · ${esc(p.cliente)} · ${esc(p.estado_texto)}</p>
+      <div class="aviso-peligro">
+        <strong>Esto no se puede deshacer.</strong>
+        El proyecto sale del taller, de Compras y de las alertas. No se borra: queda en la planilla y en el
+        historial como «Cancelado», con el motivo. El cliente ve en su seguimiento que el pedido fue cancelado.
+      </div>
+      <div class="campo"><label for="cnMotivo">Motivo de la cancelación (obligatorio)</label>
+        <textarea id="cnMotivo" maxlength="300" placeholder="Ej.: el cliente desistió del pedido"></textarea></div>
+      <p class="error" id="cnError" role="alert"></p>
+      <div class="acciones-form">
+        <button class="boton boton-peligro-lleno" type="submit">Cancelar proyecto</button>
+        <button class="boton secundario" type="button" data-cerrar>Volver</button>
+      </div>
+    </form>`);
+  const motivo = dialogo.querySelector('#cnMotivo');
+  motivo.focus();
+  dialogo.querySelector('#formCancelar').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const error = dialogo.querySelector('#cnError');
+    error.textContent = '';
+    if (motivo.value.trim().length < 5) {
+      error.textContent = 'Escribí el motivo de la cancelación.';
+      motivo.focus();
+      return;
+    }
+    const boton = dialogo.querySelector('button[type="submit"]');
+    boton.disabled = true;
+    try {
+      await api.cancelar(p.id, { id_usuario: ctx.usuarioConRol('Gerencia'), motivo: motivo.value });
+      ctx.cerrarDialogo();
+      avisar(`Proyecto ${p.id} cancelado.`);
+      await actualizar();
+    } catch (e) {
+      error.textContent = e.message;
+      boton.disabled = false;
+    }
+  });
+}
+
 export default {
   titulo: 'Estado de Trabajos',
   async montar(elemento, contexto, parametro) {
@@ -186,9 +232,11 @@ export default {
       }
       const alerta = evento.target.closest('[data-alerta]');
       const boton = evento.target.closest('[data-reprogramar]');
+      const cancelar = evento.target.closest('[data-cancelar]');
       try {
         if (alerta) irAlProyecto(alerta.dataset.id);
         else if (boton) abrirReprogramar(boton.dataset.reprogramar, await api.proyectos());
+        else if (cancelar) abrirCancelar(cancelar.dataset.cancelar, await api.proyectos());
       } catch (e) {
         avisar(e.message, 'mal');
       }

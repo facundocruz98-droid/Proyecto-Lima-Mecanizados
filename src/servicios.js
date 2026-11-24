@@ -663,6 +663,26 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
     });
   }
 
+  /**
+   * Cancela un proyecto (decisión de los dueños). No se borra nada: queda en la planilla y en el historial
+   * como "Cancelado" con su motivo. Deja de aparecer en el taller, en Compras y en las alertas; si estaba
+   * pausado, la pausa se cierra en este momento.
+   */
+  function cancelar(id, datos = {}) {
+    const usuario = exigirRol(datos.id_usuario, ['Gerencia'], 'cancelar un proyecto');
+    const p = buscarProyecto(id);
+    const motivo = texto(datos.motivo);
+    if (p.estado === 'finalizado') throw new ErrorNegocio('El trabajo ya está finalizado: no se puede cancelar.', 409);
+    if (p.estado === 'cancelado') throw new ErrorNegocio('El proyecto ya está cancelado.', 409);
+    if (motivo.length < 5) throw new ErrorNegocio('Escribí el motivo de la cancelación: sin motivo no se puede cancelar.');
+    if (motivo.length > 300) throw new ErrorNegocio('El motivo es demasiado largo.');
+    return transaccion(db, () => {
+      q.estado.run('cancelado', p.id);
+      registrarEvento(p.id, 'cancelar', usuario.id, { etapa: p.etapa_actual || null, detalle: motivo });
+      return obtenerProyecto(p.id);
+    });
+  }
+
   // ---------- Acciones de Compras ----------
   function registrarRecepcion(id, datos = {}) {
     const usuario = exigirRol(datos.id_usuario, ['Compras'], 'registrar la recepción de materiales');
@@ -884,7 +904,7 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
 
   return {
     catalogo, listarProyectos, obtenerProyecto, seguimientoCliente, alertas, indicadores, planilla, historialPausas, datosDashboard,
-    crearProyecto, importarPlanilla, reprogramar, registrarRecepcion, registrarRecepcionParcial,
+    crearProyecto, importarPlanilla, reprogramar, cancelar, registrarRecepcion, registrarRecepcionParcial,
     iniciar, pausar, continuar, finalizar, completarEtapa, iniciarEtapa, catalogoEtapas,
     restablecerDemo, vaciarDatos, inicializarSiEstaVacia,
   };

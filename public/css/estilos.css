@@ -1080,3 +1080,12 @@ textarea { min-height: 84px; resize: vertical; }
 .ingreso-enlace:hover { background: var(--acento-suave); }
 .ingreso-enlace svg { width: 16px; height: 16px; }
 .ingreso-demo { border: 1px dashed var(--borde-fuerte); margin-top: 14px; }
+
+/* Cancelar proyecto (solo Gerencia): botón en rojo y aviso dentro del diálogo */
+.boton.secundario.boton-peligro { color: var(--mal); border-color: var(--borde-fuerte); }
+.boton.secundario.boton-peligro:hover { background: var(--mal-fondo); border-color: var(--mal); color: var(--mal); }
+.boton.boton-peligro-lleno { background: var(--mal); border-color: var(--mal); color: var(--sobre-mal); }
+.boton.boton-peligro-lleno:hover { filter: brightness(.92); background: var(--mal); border-color: var(--mal); }
+.aviso-peligro { background: var(--mal-fondo); color: var(--texto); border-left: 4px solid var(--mal);
+  border-radius: 8px; padding: 10px 12px; margin: 12px 0; font-size: 13.5px; line-height: 1.45; }
+.aviso-peligro strong { display: block; color: var(--mal); margin-bottom: 2px; }

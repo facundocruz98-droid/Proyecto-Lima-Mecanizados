@@ -44,6 +44,7 @@ export const api = {
 
   crearProyecto: (datos) => pedir('POST', '/api/proyectos', datos),
   reprogramar: (id, datos) => pedir('POST', ruta(id, 'reprogramar'), datos),
+  cancelar: (id, datos) => pedir('POST', ruta(id, 'cancelar'), datos),
   recepcion: (id, datos) => pedir('POST', ruta(id, 'recepcion'), datos),
   recepcionParcial: (id, datos) => pedir('POST', ruta(id, 'recepcion-parcial'), datos),
   iniciar: (id, datos) => pedir('POST', ruta(id, 'iniciar'), datos),
