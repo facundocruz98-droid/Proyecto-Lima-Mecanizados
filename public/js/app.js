@@ -281,8 +281,8 @@ function aplicarSesion() {
   pie.insertAdjacentHTML('beforeend', `
     <div class="sesion-usuario"><span class="ico">${icono('usuario')}</span>
       <div><strong>${esc(sesion.nombre)}</strong><small>${esc(sesion.rol === 'Gerencia' ? 'Dueño' : sesion.rol)}</small></div></div>
-    <button class="boton-lateral" type="button" data-cuenta="clave"><span class="ico">${icono('llave')}</span><span>Cambiar contraseña</span></button>
-    <button class="boton-lateral" type="button" data-cuenta="salir"><span class="ico">${icono('salir')}</span><span>Cerrar sesión</span></button>`);
+    ${sesion.ingreso_rapido ? '' : `<button class="boton-lateral" type="button" data-cuenta="clave"><span class="ico">${icono('llave')}</span><span>Cambiar contraseña</span></button>`}
+    <button class="boton-lateral" type="button" data-cuenta="salir"><span class="ico">${icono('salir')}</span><span>${sesion.ingreso_rapido ? 'Cambiar de rol' : 'Cerrar sesión'}</span></button>`);
 }
 
 document.querySelector('.lateral-pie').addEventListener('click', async (evento) => {

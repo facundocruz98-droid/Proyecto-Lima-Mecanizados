@@ -26,6 +26,10 @@ El botón "Vaciar datos" (solo Gerencia) borra todos los proyectos y clientes pa
 
 ### Ingreso y permisos
 
+**Ingreso rápido (prototipo):** en la pantalla de ingreso se elige el rol (Gerencia, Supervisor, Compras u Operario)
+y se entra con un clic, sin contraseña. Cada rol sigue viendo solo su parte. Para volver a pedir usuario y contraseña,
+iniciar el servidor con la variable `INGRESO_RAPIDO=0` (en Railway: Variables → `INGRESO_RAPIDO` = `0`).
+
 Cada persona entra con **su usuario y contraseña**, y ve solo su parte del sistema:
 
 | Usuario | Quién | Qué ve |

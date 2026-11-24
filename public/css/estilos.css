@@ -1031,6 +1031,22 @@ textarea { min-height: 84px; resize: vertical; }
 .girando { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: girar .7s linear infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }
 .ingreso-ayuda { margin-top: 18px; font-size: 13px; color: var(--texto-suave); text-align: center; }
+.ingreso-roles { display: grid; gap: 10px; }
+.ingreso-rol {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; text-align: left; cursor: pointer;
+  border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie); color: var(--texto); font: inherit;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.ingreso-rol:hover { border-color: var(--acento); background: var(--superficie-2); }
+.ingreso-rol:active { transform: scale(.99); }
+.ingreso-rol:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.ingreso-rol:disabled { cursor: default; opacity: .6; }
+.ingreso-rol.cargando { opacity: 1; border-color: var(--acento); }
+.ingreso-rol > .ico { flex: none; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--acento) 12%, transparent); color: var(--acento); }
+.ingreso-rol > .ico svg { width: 20px; height: 20px; }
+.ingreso-rol strong { display: block; font-size: 15px; }
+.ingreso-rol small { display: block; color: var(--texto-suave); font-size: 13px; margin-top: 2px; }
 .ingreso-cliente { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; padding: 14px 16px;
   border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie); }
 .ingreso-cliente span:first-child { font-weight: 600; font-size: 14px; }

@@ -141,3 +141,26 @@ test('después de 5 intentos fallidos la cuenta queda bloqueada unos minutos', a
   assert.equal(r.estado, 429);
   assert.match(r.datos.error, /Demasiados intentos/);
 });
+
+test('ingreso rápido del prototipo: se elige el rol y entra sin contraseña, con los permisos de ese rol', async () => {
+  assert.deepEqual((await pedir('GET', '/api/sesion/rapida')).datos, { activo: true });
+  const operario = await pedir('POST', '/api/sesion/rapida', { cuerpo: { rol: 'Operario' } });
+  assert.equal(operario.estado, 200);
+  assert.equal(operario.datos.usuario, 'operario1');
+  assert.deepEqual(operario.datos.rutas, ['taller']);
+  assert.equal((await pedir('POST', '/api/datos/vaciar', { cookie: operario.cookie })).estado, 403, 'sigue sin poder hacer lo de Gerencia');
+  const gerencia = await pedir('POST', '/api/sesion/rapida', { cuerpo: { rol: 'Gerencia' } });
+  assert.equal(gerencia.datos.usuario, 'dueno1');
+  assert.equal((await pedir('POST', '/api/sesion/rapida', { cuerpo: { rol: 'Cliente' } })).estado, 400);
+  assert.equal((await pedir('POST', '/api/sesion/rapida', { cuerpo: { rol: 'Gerencia' }, origen: 'https://sitio-ajeno.com' })).estado, 403);
+});
+
+test('con INGRESO_RAPIDO=0 vuelve a pedir usuario y contraseña', async () => {
+  process.env.INGRESO_RAPIDO = '0';
+  try {
+    assert.deepEqual((await pedir('GET', '/api/sesion/rapida')).datos, { activo: false });
+    assert.equal((await pedir('POST', '/api/sesion/rapida', { cuerpo: { rol: 'Gerencia' } })).estado, 404);
+  } finally {
+    delete process.env.INGRESO_RAPIDO;
+  }
+});

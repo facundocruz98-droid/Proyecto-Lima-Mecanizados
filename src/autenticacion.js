@@ -207,6 +207,20 @@ function crearAutenticacion(db, { archivoClaves } = {}) {
     return { cuenta: datosPublicos(cuenta), cookie: cookieSesion(req, token, DURACION_SESION_MS / 1000) };
   }
 
+  /**
+   * Ingreso rápido del prototipo: entra con la primera cuenta del rol elegido, sin contraseña.
+   * Se apaga con la variable de entorno INGRESO_RAPIDO=0 (entonces vuelve a pedir usuario y contraseña).
+   */
+  function ingresarPorRol(req, rol) {
+    const cuenta = CUENTAS_INICIALES.map(([usuario]) => q.porUsuario.get(usuario)).find((c) => c && c.rol === rol);
+    if (!cuenta) throw new ErrorIngreso('Ese rol no existe.', 400);
+    const ahora = Date.now();
+    q.borrarVencidas.run(ahora);
+    const token = crypto.randomBytes(32).toString('base64url');
+    q.crearSesion.run(sha256(token), cuenta.id, ahora + DURACION_SESION_MS);
+    return { cuenta: datosPublicos(cuenta), cookie: cookieSesion(req, token, DURACION_SESION_MS / 1000) };
+  }
+
   /** Cuenta de la sesión del pedido, o null si no hay sesión válida. */
   function sesionDe(req) {
     const token = leerCookie(req, COOKIE);
@@ -252,7 +266,7 @@ function crearAutenticacion(db, { archivoClaves } = {}) {
     return { usuario: cuenta.usuario, nombre: cuenta.nombre, clave };
   }
 
-  return { asegurarCuentasIniciales, ingresar, sesionDe, salir, cambiarClave, restablecerClave };
+  return { asegurarCuentasIniciales, ingresar, ingresarPorRol, sesionDe, salir, cambiarClave, restablecerClave };
 }
 
 module.exports = { crearAutenticacion, ErrorIngreso, RUTAS_POR_ROL, CUENTAS_INICIALES };

@@ -255,6 +255,16 @@ function crearServidor({ rutaBase, ahora, conIngreso = true } = {}) {
       const { cuenta, cookie } = auth.ingresar(req, await leerCuerpo(req));
       return responderJSON(res, 200, cuenta, { 'Set-Cookie': cookie });
     }
+    // Ingreso rápido del prototipo (sin contraseña): se apaga con INGRESO_RAPIDO=0.
+    const ingresoRapido = conIngreso && process.env.INGRESO_RAPIDO !== '0';
+    if (ruta === '/api/sesion/rapida' && method === 'GET') {
+      return responderJSON(res, 200, { activo: ingresoRapido });
+    }
+    if (ruta === '/api/sesion/rapida' && method === 'POST') {
+      if (!ingresoRapido) return responderJSON(res, 404, { error: 'El ingreso rápido está desactivado.' });
+      const { cuenta, cookie } = auth.ingresarPorRol(req, String((await leerCuerpo(req)).rol || ''));
+      return responderJSON(res, 200, cuenta, { 'Set-Cookie': cookie });
+    }
     if (ruta === '/api/sesion/salir' && method === 'POST') {
       return responderJSON(res, 200, { ok: true }, { 'Set-Cookie': auth.salir(req) });
     }
@@ -265,7 +275,7 @@ function crearServidor({ rutaBase, ahora, conIngreso = true } = {}) {
       if (!sesion) return responderJSON(res, 401, { error: 'Tu sesión terminó. Volvé a ingresar.' });
       if (ruta === '/api/sesion' && method === 'GET') {
         const { id_cuenta: _c, token_hash: _t, ...datos } = sesion;
-        return responderJSON(res, 200, datos);
+        return responderJSON(res, 200, { ...datos, ingreso_rapido: ingresoRapido });
       }
       if (ruta === '/api/sesion/clave' && method === 'POST') {
         auth.cambiarClave(sesion, await leerCuerpo(req));

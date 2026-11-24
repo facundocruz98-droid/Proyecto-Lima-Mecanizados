@@ -15,6 +15,39 @@ try {
   if (yo.ok) location.replace('/');
 } catch { /* sin conexión: se muestra el formulario igual */ }
 
+// Ingreso rápido del prototipo: se elige el rol y se entra sin contraseña.
+const roles = document.getElementById('roles');
+try {
+  const rapida = await (await fetch('/api/sesion/rapida', { cache: 'no-store' })).json();
+  if (rapida.activo) {
+    roles.hidden = false;
+    document.getElementById('conClave').hidden = true;
+    document.getElementById('subtituloIngreso').textContent = 'Elegí con qué rol querés entrar.';
+  }
+} catch { /* si falla, queda el ingreso con usuario y contraseña */ }
+
+roles.addEventListener('click', async (evento) => {
+  const elegido = evento.target.closest('[data-rol]');
+  if (!elegido) return;
+  error.textContent = '';
+  roles.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  elegido.classList.add('cargando');
+  try {
+    const respuesta = await fetch('/api/sesion/rapida', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rol: elegido.dataset.rol }),
+    });
+    const datos = await respuesta.json().catch(() => ({}));
+    if (!respuesta.ok) throw new Error(datos.error || 'No se pudo ingresar.');
+    location.replace('/');
+  } catch (e) {
+    error.textContent = e.message === 'Failed to fetch' ? 'No se pudo conectar con el servidor.' : e.message;
+    roles.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+    elegido.classList.remove('cargando');
+  }
+});
+
 // Mostrar / ocultar la contraseña.
 verClave.addEventListener('click', () => {
   const visible = clave.type === 'text';
