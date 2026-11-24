@@ -1,7 +1,7 @@
 /** Panel de Gerencia y Supervisión: semáforo de proyectos y alertas. */
 import { api } from '../api.js';
 import { campoFecha } from '../calendario.js';
-import { avisar, codigoConUrgencia, esc, fecha, fechaDeInstante, fechaHora, pastillaEstado, textoEtapa, textoPlazo } from '../util.js';
+import { avisar, esc, fecha, fechaDeInstante, fechaHora, pastillaEstado, textoEtapa, textoPlazo } from '../util.js';
 
 let raiz;
 let ctx;
@@ -32,8 +32,10 @@ function filaProyecto(p) {
        <button class="boton secundario chico boton-peligro" type="button" data-cancelar="${esc(p.id)}">Cancelar proyecto</button>`;
   return `
     <tr class="fila-${p.semaforo}${p.id === resaltado ? ' fila-resaltada' : ''}" data-id="${esc(p.id)}">
-      <td>${codigoConUrgencia(p)}</td>
-      <td><strong>${esc(p.nombre)}</strong><div class="chico suave">${esc(p.cliente)}</div>${pausa}</td>
+      <td class="celda-proyecto">
+        <div class="proyecto-titulo"><strong>${esc(p.nombre)}</strong>${p.urgencia === 'U' ? '<span class="urgente" title="Urgente">URGENTE</span>' : ''}</div>
+        <div class="chico suave">${esc(p.cliente)} · Pedido <span class="codigo-chico">${esc(p.id)}</span></div>${pausa}
+      </td>
       <td>${pastillaEstado(p)}</td>
       <td>${textoEtapa(p)}</td>
       <td class="num">${fecha(p.plazo_entrega)}${plazo}</td>
@@ -103,7 +105,7 @@ async function actualizar() {
     <div class="tarjeta indicador"><b>${cuenta.cancelado}</b><span>Cancelados</span></div>`;
   raiz.querySelector('#proyectos').innerHTML = proyectos.length
     ? proyectos.map(filaProyecto).join('')
-    : '<tr><td colspan="7" class="vacio">Todavía no hay proyectos. Cargá el primero desde "Alta de proyecto".</td></tr>';
+    : '<tr><td colspan="6" class="vacio">Todavía no hay proyectos. Cargá el primero desde "Alta de proyecto".</td></tr>';
 }
 
 function abrirReprogramar(id, proyectos) {
@@ -219,7 +221,7 @@ export default {
           </div></div>
         <div class="tarjeta-cuerpo sin-margen"><div class="tabla-caja">
           <table>
-            <thead><tr><th>ID</th><th>Trabajo</th><th>Estado</th><th>Etapa</th><th>Plazo de entrega</th><th title="Plazo de la empresa más el tiempo que el trabajo estuvo detenido">Entrega estimada</th><th></th></tr></thead>
+            <thead><tr><th>Proyecto</th><th>Estado</th><th>Etapa</th><th>Plazo de entrega</th><th title="Plazo de la empresa más el tiempo que el trabajo estuvo detenido">Entrega estimada</th><th></th></tr></thead>
             <tbody id="proyectos"></tbody>
           </table>
         </div></div>
