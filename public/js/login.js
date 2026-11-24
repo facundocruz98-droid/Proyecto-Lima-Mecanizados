@@ -10,26 +10,35 @@ const avisoMayus = document.getElementById('avisoMayus');
 
 pintarIconos();
 
-// Las dos consultas van juntas. Hasta tener la respuesta no se muestra ninguna de las dos formas de
-// ingreso, así no aparece por un instante el formulario de usuario y contraseña antes de los roles.
+// Si ya hay una sesión abierta, entra directo.
+try {
+  const yo = await fetch('/api/sesion', { cache: 'no-store' });
+  if (yo.ok) location.replace('/');
+} catch { /* sin conexión: se muestra el formulario igual */ }
+
+// Ingreso rápido para demostraciones: el formulario de usuario y contraseña es la entrada principal,
+// y si el servidor tiene el ingreso rápido activo aparece un botón que muestra los roles.
 const roles = document.getElementById('roles');
+const modoDemo = document.getElementById('modoDemo');
 const conClave = document.getElementById('conClave');
-const [sesion, rapida] = await Promise.all([
-  fetch('/api/sesion', { cache: 'no-store' }).catch(() => null),
-  fetch('/api/sesion/rapida', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
-]);
-if (sesion?.ok) {
-  location.replace('/'); // ya hay una sesión abierta: entra directo sin mostrar nada
-} else if (rapida.activo) {
-  // Ingreso rápido del prototipo: se elige el rol y se entra sin contraseña.
-  roles.hidden = false;
-  document.getElementById('subtituloIngreso').textContent = 'Elegí con qué rol querés entrar.';
-} else {
-  // Si el ingreso rápido está apagado (o falla la consulta), queda el ingreso con usuario y contraseña.
-  conClave.hidden = false;
-  document.getElementById('subtituloIngreso').textContent = 'Ingresá con el usuario que te dio la empresa.';
-  formulario.usuario.focus();
+const abrirDemo = document.getElementById('abrirDemo');
+const subtitulo = document.getElementById('subtituloIngreso');
+
+function mostrarDemo(si) {
+  modoDemo.hidden = !si;
+  conClave.hidden = si;
+  error.textContent = '';
+  subtitulo.textContent = si ? 'Ingreso rápido para la demostración: elegí un rol.'
+    : 'Ingresá con el usuario que te dio la empresa.';
+  (si ? roles.querySelector('button') : formulario.usuario).focus();
 }
+abrirDemo.addEventListener('click', () => mostrarDemo(true));
+document.getElementById('volverClave').addEventListener('click', () => mostrarDemo(false));
+
+fetch('/api/sesion/rapida', { cache: 'no-store' })
+  .then((r) => r.json())
+  .then((rapida) => { if (rapida.activo) abrirDemo.hidden = false; })
+  .catch(() => { /* sin ingreso rápido: queda solo usuario y contraseña */ });
 
 roles.addEventListener('click', async (evento) => {
   const elegido = evento.target.closest('[data-rol]');

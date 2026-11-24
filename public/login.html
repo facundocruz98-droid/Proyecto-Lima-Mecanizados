@@ -24,18 +24,21 @@
       <form class="ingreso-form" id="formIngreso" novalidate>
         <div class="ingreso-logo-chico"><svg viewBox="0 0 32 32" width="40" height="40" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M8 8.5v15M11.5 8.5v15M14.5 8.5v15M18.5 8.5v15M21 8.5v15M24.5 8.5v15" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg><strong>Lima Mecanizados</strong></div>
         <h1>Iniciá sesión</h1>
-        <p class="subtitulo" id="subtituloIngreso">&nbsp;</p>
+        <p class="subtitulo" id="subtituloIngreso">Ingresá con el usuario que te dio la empresa.</p>
         <p class="ingreso-error" id="error" role="alert"></p>
-        <div class="ingreso-roles" id="roles" hidden>
+        <div id="modoDemo" hidden>
+        <div class="ingreso-roles" id="roles">
           <button type="button" class="ingreso-rol" data-rol="Gerencia"><span class="ico" data-icono="grafico"></span><span><strong>Gerencia</strong><small>Estado de trabajos, alta y planilla</small></span></button>
           <button type="button" class="ingreso-rol" data-rol="Supervisor"><span class="ico" data-icono="panel"></span><span><strong>Supervisor</strong><small>Estado de trabajos e historial</small></span></button>
           <button type="button" class="ingreso-rol" data-rol="Compras"><span class="ico" data-icono="caja"></span><span><strong>Compras</strong><small>Recepción de materiales</small></span></button>
           <button type="button" class="ingreso-rol" data-rol="Operario"><span class="ico" data-icono="escaner"></span><span><strong>Operario</strong><small>Puesto de taller</small></span></button>
         </div>
-        <div id="conClave" hidden>
+          <button type="button" class="ingreso-enlace" id="volverClave"><span data-icono="izquierda"></span>Volver a usuario y contraseña</button>
+        </div>
+        <div id="conClave">
         <div class="campo"><label for="usuario">Usuario</label>
           <div class="campo-icono"><span class="ico" data-icono="usuario"></span>
-            <input id="usuario" name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" placeholder="Ej.: operario1"></div></div>
+            <input id="usuario" name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" placeholder="Ej.: operario1" autofocus></div></div>
         <div class="campo"><label for="clave">Contraseña</label>
           <div class="campo-icono"><span class="ico" data-icono="candado"></span>
             <input id="clave" name="clave" type="password" autocomplete="current-password" maxlength="128" placeholder="Tu contraseña">
@@ -43,6 +46,7 @@
           <p class="aviso-mayus" id="avisoMayus" hidden>⚠ Las mayúsculas están activadas</p></div>
         <button class="boton ingreso-boton" type="submit" id="botonIngresar">Ingresar</button>
         <p class="ingreso-ayuda">¿Te olvidaste la contraseña? Pedile a uno de los dueños que te la restablezca.</p>
+        <button type="button" class="ingreso-enlace ingreso-demo" id="abrirDemo" hidden><span data-icono="siguiente"></span>Ingreso rápido (demo)</button>
         </div>
         <div class="ingreso-cliente">
           <span>¿Sos cliente?</span>
