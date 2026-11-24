@@ -7,6 +7,7 @@
  *    (NOMBRE PROYECTO, NOMBRE PROY o Columna1).
  *  - Si trae "HISTORIAL EVENTOS (JSON)", se cargan esos eventos tal cual ocurrieron.
  *  - Si no, se arma un historial mínimo a partir del estado (ESTADO OPERATIVO o Estado).
+ *  - Opcional: MATERIALES, lo que Compras tiene que recibir (uno por renglón o separados por ";").
  *
  * Los proyectos cancelados también se cargan (estado "Cancelado").
  */
@@ -33,6 +34,7 @@ const COLUMNAS = {
   causa: ['ULTIMA CAUSA DE PAUSA'],
   detallePausa: ['ULTIMA DESCRIPCION DE PAUSA'],
   motivo: ['MOTIVO DE DEMORA'],
+  materiales: ['MATERIALES', 'MATERIALES INDISPENSABLES', 'MATERIALES A RECIBIR'],
 };
 const OBLIGATORIAS = ['id', 'ingreso', 'plazo', 'cliente', 'nombre'];
 const NOMBRE_COLUMNA = { id: 'ID', ingreso: 'FECHA IN', plazo: 'PLAZO ENTREGA', cliente: 'CLIENTE', nombre: 'NOMBRE PROY (o NOMBRE PROYECTO)' };
@@ -69,6 +71,12 @@ function leerFecha(valor, fecha1904) {
   m = /^(\d{4}-\d{2}-\d{2})(?:[ T].*)?$/.exec(t);
   if (m) fecha = m[1];
   return reglas.esFechaValida(fecha) ? fecha : '';
+}
+
+/** Celda de materiales → lista (uno por renglón o separados por ";"), como en el alta: hasta 30, de 120 letras. */
+function leerMateriales(valor) {
+  return textoCelda(valor).split(/\r?\n|;/).map((m) => m.trim().replace(/\s+/g, ' ')).filter(Boolean)
+    .slice(0, 30).map((m) => recortar(m, 120));
 }
 
 function leerSiNo(valor) {
@@ -149,7 +157,8 @@ function eventosDelEstado(estado, f, ahora) {
   const nivel = orden.indexOf(estado);
   const dia = f.ingreso;
   const eventos = [{ tipo: 'alta', instante: momento(dia, 9, ahora), detalle: 'Cargado desde Excel' }];
-  if (nivel >= 1) eventos.push({ tipo: 'recepcion', instante: momento(dia, 10, ahora), detalle: 'Materiales indispensables (cargado desde Excel)' });
+  const recibido = f.materiales?.length ? recortar(f.materiales.join(', '), 300) : 'Materiales indispensables (cargado desde Excel)';
+  if (nivel >= 1) eventos.push({ tipo: 'recepcion', instante: momento(dia, 10, ahora), detalle: recibido });
   if (nivel >= 2) eventos.push({ tipo: 'inicio', instante: momento(dia, 11, ahora), etapa: f.etapa || reglas.ETAPAS[0] });
   if (estado === 'pausado') {
     let causa = f.causa;
@@ -214,6 +223,7 @@ function analizarLibro(libro, { existentes, clientes, ahora }) {
       causa: textoCelda(celda('causa')),
       detallePausa: textoCelda(celda('detallePausa')),
       motivo: textoCelda(celda('motivo')),
+      materiales: leerMateriales(celda('materiales')),
     };
     if (!f.ingreso) { omitir('la FECHA IN no es una fecha válida'); continue; }
     if (!f.plazo) { omitir('el PLAZO ENTREGA no es una fecha válida'); continue; }
@@ -243,6 +253,7 @@ function analizarLibro(libro, { existentes, clientes, ahora }) {
       fecha_ingreso: f.ingreso, plazo_entrega: f.plazo, codigo_cliente: codigo,
       nombre: f.nombre, descripcion: f.descripcion, nro_presupuesto: '',
       aprobado: true, // la columna APROB del Excel ya no se usa
+      materiales: f.materiales,
       estado: historial.estado, etapa_actual: historial.estado === 'pendiente_mat' || historial.estado === 'listo' ? '' : historial.etapa,
       eventos: historial.eventos.map((e) => ({ ...e, fecha_hora: new Date(e.instante).toISOString(), rol: ROL_DEL_EVENTO[e.tipo] })),
     });
@@ -260,4 +271,4 @@ function analizarLibro(libro, { existentes, clientes, ahora }) {
   };
 }
 
-module.exports = { analizarLibro, leerFecha };
+module.exports = { analizarLibro, leerFecha, leerMateriales };

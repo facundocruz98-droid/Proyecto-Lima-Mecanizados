@@ -553,9 +553,12 @@ function crearServicios(db, { ahora = () => new Date() } = {}) {
       for (const p of analisis.nuevos) {
         insertarProyecto.run(p.id, p.numero, p.item, p.fecha_ingreso, p.plazo_entrega, idCliente.get(p.codigo_cliente), p.nombre,
             p.descripcion, p.nro_presupuesto, p.urgencia, p.aprobado ? 1 : 0, p.estado, p.etapa_actual);
+        // Si el Excel trae la columna MATERIALES se cargan tal cual; si no, queda uno genérico.
         const recepcion = p.eventos.find((e) => e.tipo === 'recepcion');
-        q.insertarMaterial.run(p.id, 'Materiales indispensables (cargado desde Excel)', 1,
-          recepcion ? 1 : 0, recepcion ? recepcion.fecha_hora : null);
+        const materiales = p.materiales.length ? p.materiales : ['Materiales indispensables (cargado desde Excel)'];
+        for (const m of materiales) {
+          q.insertarMaterial.run(p.id, m, 1, recepcion ? 1 : 0, recepcion ? recepcion.fecha_hora : null);
+        }
         for (const e of p.eventos) {
           q.insertarEvento.run(p.id, e.tipo, e.fecha_hora, usuarioDe(e.rol), e.etapa, e.causa, e.detalle);
         }
